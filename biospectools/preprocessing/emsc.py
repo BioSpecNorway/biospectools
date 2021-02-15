@@ -39,13 +39,13 @@ def emsc(
     Returns
     -------
     preprocessed_spectra : `(N_samples, K_channels) ndarray`
-    coefficients : `(N_samples, 1 + N_constituents + (poly_order + 1) ndarray`
+    coefficients : `(N_samples, 1 + N_constituents + (poly_order + 1) ndarray`, optional
         If ``return_coefs`` is true, then returns coefficients in the
         following order:
         #. Scaling parametes, b (related to reference spectrum)
         #. All constituents parameters in the same order as they given
         #. Polynomial coefficients (slope, quadratic effect and so on)
-    residuals: `(N_samples, K_channels) ndarray`
+    residuals: `(N_samples, K_channels) ndarray`, optional
         If ``return_residuals`` is true, then returns residuals
 
 
