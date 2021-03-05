@@ -10,7 +10,9 @@ setup(
     url='https://www.nmbu.no/en/faculty/realtek/research/groups/biospectroscopy',
     packages=find_packages(),
     install_requires=[
-        'numpy'
+        'numpy',
+        'scipy',
+        'scikit-learn'
     ],
     setup_requires=['pytest-runner', 'numpy'],
     tests_require=['pytest']
