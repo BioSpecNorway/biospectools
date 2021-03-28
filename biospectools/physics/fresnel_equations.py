@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def reflection_amp(n, wavelength, l):
     k = 2*np.pi / wavelength
     n0 = 1
