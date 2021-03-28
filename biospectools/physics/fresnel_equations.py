@@ -1,23 +1,25 @@
 import numpy as np
 
 def reflection_amp(n, wavelength, l):
-    nu = 1/wavelength
-    k = 2*np.pi*nu
+    k = 2*np.pi / wavelength
     n0 = 1
     nt = 1
-    A = 2*n0*(n+nt)/((n0+n)*(n+nt) - np.exp(2*1j*n*k*l)*(n-nt)*(n-n0))
-    B = 2*n0*(n-nt)*np.exp(2*1j*n*k*l)/((n0+n)*(n+nt) - np.exp(2*1j*n*k*l)*(n-nt)*(n-n0))
+    e = np.exp(1j*n*k*l)
+    num = 1 / ((n0+n)*(n+nt) - e**2*(n-nt)*(n-n0))
+    A = 2*n0*(n+nt) * num
+    B = 2*n0*(n-nt)*e**2 * num
     return (1/(2*n0))*(A*(n0-n)+B*(n0+n))
 
 
 def transmission_amp(n, wavelength, l):
-    nu = 1 / wavelength
-    k = 2*np.pi*nu
+    k = 2*np.pi / wavelength
     n0 = 1
     nt = 1
-    A = 2*n0*(n+nt)/((n0+n)*(n+nt) - np.exp(2*1j*n*k*l)*(n-nt)*(n-n0))
-    B = 2*n0*(n-nt)*np.exp(2*1j*n*k*l)/((n0+n)*(n+nt) - np.exp(2*1j*n*k*l)*(n-nt)*(n-n0))
-    return np.exp(-1j*nt*k*l)*(A*np.exp(1j*n*k*l) + B*np.exp(-1j*n*k*l))
+    e = np.exp(1j*n*k*l)
+    num = 1 / ((n0+n)*(n+nt) - e**2*(n-nt)*(n-n0))
+    A = 2*n0*(n+nt) * num
+    B = 2*n0*(n-nt)*e**2 * num
+    return np.exp(-1j*nt*k*l)*(A*e + B/e)
 
 
 if __name__ == '__main__':
