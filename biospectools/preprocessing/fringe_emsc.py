@@ -43,27 +43,6 @@ class FringeEMSC:
         else:
             return weights
 
-    # def npr(self, Abs, l, nu):
-    #     return (Abs*np.log(10))/(4*np.pi*l*nu)
-
-
-    # def nkk(self, npr):
-    #     """Calculates the imaginary part and fluctuating real part of the refractive index."""
-    #
-    #     # Extend absorbance spectrum
-    #     # dw = wavenumbers[1] - wavenumbers[0]
-    #     extN = npr.shape[0]
-    #     extension1 = npr[0] * np.ones(extN)
-    #     extension2 = npr[-1] * np.ones(extN)
-    #     npr_extended = np.hstack((extension1, npr, extension2))
-    #
-    #     # Calculate Hilbert transform
-    #     nkk_extended = (-hilbert(npr_extended).imag)
-    #
-    #     # Cut extended spectrum
-    #     nkk = nkk_extended[extN:-extN]
-    #     return nkk
-
     def frequency_from_spectrum(self, rawspectrum, wn):
         indLower = np.argmin(abs(wn-self.wnLower))
         indUpper = np.argmin(abs(wn-self.wnUpper))
@@ -76,11 +55,10 @@ class FringeEMSC:
 
         # apply window
         N = len(region_frequency)
-        w = blackmanharris(N)
-        w = signal.bartlett(N) #barthann, bartlett, blackman, blackmanharris, bohman, hamming, hann, hanning,  nuttall, parzen, slepian, triang, tukey
+        w = signal.bartlett(N)
         region_frequency = region_frequency * w
 
-        region_frequency = np.hstack((np.zeros([int(np.ceil(nPad*self.Npad))]), region_frequency, np.zeros([int(np.ceil(nPad*self.Npad))])))  # FIXME uncomment to get back to original
+        region_frequency = np.hstack((np.zeros([int(np.ceil(nPad*self.Npad))]), region_frequency, np.zeros([int(np.ceil(nPad*self.Npad))])))
         if len(region_frequency) % 2:
             region_frequency = np.hstack((region_frequency, region_frequency[-1]))
 
@@ -117,15 +95,7 @@ class FringeEMSC:
         else:
             freqMax = x[np.flip(peaks_ind[n_max])]
 
-        # if self.plotFreqSpec:
-        #     plt.figure()
-        #     plt.stem(x, fTransform)
-        #     if self.double_freq:
-        #         plt.stem(np.flip(freqMax), fTransform[peakpos_double], linefmt='blue', markerfmt='bo')
-        #     else:
-        #         plt.stem(np.flip(freqMax), fTransform[peaks_ind[n_max]], linefmt='blue', markerfmt='bo')
-
-        return freqMax  # FIXME give all frequencies for all different spectra
+        return freqMax
 
     def setup_emsc(self, freqMax, wn):
         half_rng = np.abs(wn[0] - wn[-1]) / 2
@@ -199,7 +169,7 @@ class FringeEMSC:
             self.flipWN = True
             self.weights = self.flipWeights(self.weights)
 
-        newspectra, parameters, residuals, modelspectra, freq_list = self.correct_spectra(spectra, wn)  # FIXME need to give output form all iterations
+        newspectra, parameters, residuals, modelspectra, freq_list = self.correct_spectra(spectra, wn)
 
         if self.flipWN:
             newspectra = np.fliplr(newspectra)
@@ -256,11 +226,10 @@ class FringeEMSC2:
 
         # apply window
         N = len(region_frequency)
-        w = blackmanharris(N)
-        w = signal.bartlett(N) #barthann, bartlett, blackman, blackmanharris, bohman, hamming, hann, hanning,  nuttall, parzen, slepian, triang, tukey
+        w = signal.bartlett(N)
         region_frequency = region_frequency * w
 
-        region_frequency = np.hstack((np.zeros([int(np.ceil(nPad*self.Npad))]), region_frequency, np.zeros([int(np.ceil(nPad*self.Npad))])))  # FIXME uncomment to get back to original
+        region_frequency = np.hstack((np.zeros([int(np.ceil(nPad*self.Npad))]), region_frequency, np.zeros([int(np.ceil(nPad*self.Npad))])))
         if len(region_frequency) % 2:
             region_frequency = np.hstack((region_frequency, region_frequency[-1]))
 
@@ -277,7 +246,6 @@ class FringeEMSC2:
         x = x[0:N//2]
 
         peaks_ind, _ = find_peaks(fTransform)
-
 
         n_max = fTransform[peaks_ind].argsort()[-self.nFreq:]
 
@@ -297,7 +265,7 @@ class FringeEMSC2:
         else:
             freqMax = x[np.flip(peaks_ind[n_max])]
 
-        return freqMax  # FIXME give all frequencies for all different spectra
+        return freqMax
 
     def setup_and_solve_emsc(self, rawspectrum, freqMax, wn):
 
@@ -393,14 +361,14 @@ if __name__ == '__main__':
     plt.plot(wn, fringe_spectrum)
     plt.plot(wn, corr[0,:])
 
-    # fringeEMSCmodelEMSC2 = FringeEMSC2(refSpec=lorentz_peak*10, wnref=wn, wnLower=1800, wnUpper=2320, nFreq=1,
-    #                                    scaling=True, polyorder=1, Npad=2.5, double_freq=True)
+    fringeEMSCmodelEMSC2 = FringeEMSC2(refSpec=lorentz_peak*10, wnref=wn, wnLower=1800, wnUpper=2320, nFreq=1,
+                                       scaling=True, polyorder=1, Npad=2.5, double_freq=True)
 
-    # corr, par, res, freqList = fringeEMSCmodelEMSC2.transform(fringe_spectrum[np.newaxis, :], wn)
-    #
-    # plt.figure()
-    # plt.plot(wn, fringe_spectrum)
-    # plt.plot(wn, corr[0,:])
-    # plt.show()
+    corr, par, res, freqList2 = fringeEMSCmodelEMSC2.transform(fringe_spectrum[np.newaxis, :], wn)
+
+    plt.figure()
+    plt.plot(wn, fringe_spectrum)
+    plt.plot(wn, corr[0,:])
+    plt.show()
 
     print('lol')
