@@ -4,6 +4,21 @@ from sklearn.decomposition import TruncatedSVD
 from biospectools.physics.misc import calculate_complex_n
 
 
+def fill_edges_1d(l):
+    """Replace (inplace!) NaN at sides with the closest value"""
+    loc = np.where(~np.isnan(l))[0]
+    if len(loc):
+        fi, li = loc[[0, -1]]
+        l[:fi] = l[fi]
+        l[li + 1 :] = l[li]
+
+
+def fill_edges(mat):
+    """Replace (inplace!) NaN at sides with the closest value"""
+    for l in mat:
+        fill_edges_1d(l)
+
+
 def nan_extend_edges_and_interpolate(xs, X):
     """
     Handle NaNs at the edges are handled as with savgol_filter mode nearest:
@@ -66,7 +81,7 @@ def transform_back_to_features(xsind, mon, X):
     return X if mon else X[:, np.argsort(xsind)]
 
 
-def calculate_Qext_curves(nkks, nprs, alpha0, gamma, wavenumbers):
+def calculate_qext_curves(nkks, nprs, alpha0, gamma, wavenumbers):
     gamma_nprs = (1 + np.multiply.outer(gamma, nprs)) * (wavenumbers * 100)
     tanbeta = nkks / np.add.outer((1 / gamma.T), nprs)
 
@@ -77,7 +92,7 @@ def calculate_Qext_curves(nkks, nprs, alpha0, gamma, wavenumbers):
     n_alpha = len(alpha0)
     n_gamma = len(gamma)
 
-    Q = np.zeros((n_alpha * n_gamma, len(wavenumbers)))
+    q_matrix = np.zeros((n_alpha * n_gamma, len(wavenumbers)))
 
     for i in range(n_alpha):
         rho = alpha0[i] * gamma_nprs
@@ -87,46 +102,46 @@ def calculate_Qext_curves(nkks, nprs, alpha0, gamma, wavenumbers):
             * (np.sin((rho) - (beta0)) + np.cos((rho - 2 * beta0)) * rhocosB)
             + cos2B * rhocosB
         )
-        Q[i * n_alpha : (i + 1) * n_alpha, :] = q
-    return Q
+        q_matrix[i * n_alpha : (i + 1) * n_alpha, :] = q
+    return q_matrix
 
 
-def orthogonalize_Qext(Qext, reference):
+def orthogonalize_qext(qext, reference):
     m = np.dot(reference, reference)
     norm = np.sqrt(m)
     rnorm = reference / norm
-    s = np.dot(Qext, rnorm)
-    Qext_orthogonalized = Qext - s[:, np.newaxis] * rnorm[np.newaxis, :]
-    return Qext_orthogonalized
+    s = np.dot(qext, rnorm)
+    qext_orthogonalized = qext - s[:, np.newaxis] * rnorm[np.newaxis, :]
+    return qext_orthogonalized
 
 
-def compress_Mie_curves(Qext_orthogonalized, numComp):
+def compress_mie_curves(qext_orthogonalized, num_comp):
     svd = TruncatedSVD(
-        n_components=numComp, n_iter=7, random_state=42
+        n_components=num_comp, n_iter=7, random_state=42
     )  # Self.ncomp needs to be specified
-    svd.fit(Qext_orthogonalized)
-    badspectra = svd.components_[0:numComp, :]
+    svd.fit(qext_orthogonalized)
+    badspectra = svd.components_[0:num_comp, :]
     return badspectra
 
 
-def cal_ncomp(reference, wavenumbers, explainedVarLim, alpha0, gamma):
+def cal_ncomp(reference, wavenumbers, explained_var_lim, alpha0, gamma):
     nprs, nkks = calculate_complex_n(reference, wavenumbers)
-    Qext = calculate_Qext_curves(nprs, nkks, alpha0, gamma, wavenumbers)
-    Qext_orthogonalized = orthogonalize_Qext(Qext, reference)
-    maxNcomp = reference.shape[0] - 1
-    svd = TruncatedSVD(n_components=min(maxNcomp, 30), n_iter=7, random_state=42)
-    svd.fit(Qext_orthogonalized)
+    qext = calculate_qext_curves(nprs, nkks, alpha0, gamma, wavenumbers)
+    qext_orthogonalized = orthogonalize_qext(qext, reference)
+    max_ncomp = reference.shape[0] - 1
+    svd = TruncatedSVD(n_components=min(max_ncomp, 30), n_iter=7, random_state=42)
+    svd.fit(qext_orthogonalized)
     lda = np.array(
         [
-            (sing_val ** 2) / (Qext_orthogonalized.shape[0] - 1)
+            (sing_val ** 2) / (qext_orthogonalized.shape[0] - 1)
             for sing_val in svd.singular_values_
         ]
     )
 
-    explainedVariance = 100 * lda / np.sum(lda)
-    explainedVariance = np.cumsum(explainedVariance)
-    numComp = np.argmax(explainedVariance > explainedVarLim) + 1
-    return numComp
+    explained_var = 100 * lda / np.sum(lda)
+    explained_var = np.cumsum(explained_var)
+    num_comp = np.argmax(explained_var > explained_var_lim) + 1
+    return num_comp
 
 
 class ME_EMSC:
@@ -143,7 +158,7 @@ class ME_EMSC:
         precision: int = 4,
         track_progress: bool = False,
         fixed_iter: bool = False,
-        positiveRef: bool = True,
+        positive_ref: bool = True,
     ):
 
         super().__init__()
@@ -157,11 +172,11 @@ class ME_EMSC:
         self.reference = reference
         self.precision = precision
         self.wn_reference = wn_reference
-        self.positiveRef = positiveRef
+        self.positive_ref = positive_ref
         self.weights = weights
         self.ncomp = ncomp
         self.track_progress = track_progress
-        explainedVariance = 99.96
+        explained_variance = 99.96
 
         if fixed_iter is False:
             self.maxNiter = max_iter
@@ -187,10 +202,10 @@ class ME_EMSC:
             ref_X = interpolate_to_data(self.wn_reference.T, ref_X, wavenumbers_ref.T)
             ref_X = ref_X[0]
             self.ncomp = cal_ncomp(
-                ref_X, wavenumbers_ref, explainedVariance, self.alpha0, self.gamma
+                ref_X, wavenumbers_ref, explained_variance, self.alpha0, self.gamma
             )
         else:
-            self.explainedVariance = False
+            self.explained_variance = False
 
     def correct(self, X, wavenumbers):
         # wavenumber have to be input as sorted
@@ -252,18 +267,18 @@ class ME_EMSC:
             reference = reference[0]
 
             # set negative parts to zero
-            nonzeroReference = reference.copy()
-            nonzeroReference[nonzeroReference < 0] = 0
+            nonzero_reference = reference.copy()
+            nonzero_reference[nonzero_reference < 0] = 0
 
-            if self.positiveRef:
-                reference = nonzeroReference
+            if self.positive_ref:
+                reference = nonzero_reference
 
             # calculate Qext-curves
-            nprs, nkks = calculate_complex_n(nonzeroReference, wavenumbers)
-            Qext = calculate_Qext_curves(nprs, nkks, alpha0, gamma, wavenumbers)
-            Qext = orthogonalize_Qext(Qext, reference)
+            nprs, nkks = calculate_complex_n(nonzero_reference, wavenumbers)
+            qext = calculate_qext_curves(nprs, nkks, alpha0, gamma, wavenumbers)
+            qext = orthogonalize_qext(qext, reference)
 
-            badspectra = compress_Mie_curves(Qext, self.ncomp)
+            badspectra = compress_mie_curves(qext, self.ncomp)
 
             # build ME-EMSC model
             M = make_emsc_model(badspectra, reference)
@@ -378,7 +393,7 @@ class ME_EMSC:
 
         ref_X = ref_X * wei_X
         ref_X = ref_X[0]
-        if self.positiveRef:
+        if self.positive_ref:
             ref_X[ref_X < 0] = 0
 
         resonant = True  # Possibility for using the 2008 version
@@ -395,9 +410,9 @@ class ME_EMSC:
         # For the first iteration, make basic EMSC model
         M_basic = make_basic_emsc_mod(ref_X)
         # Calculate scattering curves for ME-EMSC
-        Qext = calculate_Qext_curves(nprs, nkks, self.alpha0, self.gamma, wavenumbers)
-        Qext = orthogonalize_Qext(Qext, ref_X)
-        badspectra = compress_Mie_curves(Qext, self.ncomp)
+        qext = calculate_qext_curves(nprs, nkks, self.alpha0, self.gamma, wavenumbers)
+        qext = orthogonalize_qext(qext, ref_X)
+        badspectra = compress_mie_curves(qext, self.ncomp)
         # Establish ME-EMSC model
         M = make_emsc_model(badspectra, ref_X)
         # Correcting all spectra at once for the first iteration
