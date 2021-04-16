@@ -155,13 +155,10 @@ class ME_EMSC:
         a: np.ndarray = np.linspace(2, 7.1, 10),
         h: float = 0.25,
         max_iter: int = 30,
-        precision: int = 4,
-        track_progress: bool = False,
-        fixed_iter: bool = False,
+        tol: int = 4,
+        verbose: bool = False,
         positive_ref: bool = True,
     ):
-
-        super().__init__()
 
         if reference is None:
             raise ValueError("reference spectrum must be defined")
@@ -170,20 +167,13 @@ class ME_EMSC:
             raise ValueError("wn_reference must be ascending")
 
         self.reference = reference
-        self.precision = precision
+        self.tol = tol
         self.wn_reference = wn_reference
         self.positive_ref = positive_ref
         self.weights = weights
         self.ncomp = ncomp
-        self.track_progress = track_progress
-        explained_variance = 99.96
-
-        if fixed_iter is False:
-            self.maxNiter = max_iter
-        else:
-            self.maxNiter = fixed_iter
-
-        self.fixedNiter = fixed_iter
+        self.verbose = verbose
+        self.max_iter = max_iter
 
         self.n0 = n0
         self.a = a
@@ -196,6 +186,7 @@ class ME_EMSC:
             / (4 * np.pi * 0.5 * np.pi * (self.n0 - 1) * self.a * 1e-6)
         )
 
+        explained_variance = 99.96
         if self.ncomp == 0:
             ref_X = np.atleast_2d(spectra_mean(np.expand_dims(self.reference, axis=0)))
             wavenumbers_ref = np.array(sorted(self.wn_reference))
@@ -207,7 +198,7 @@ class ME_EMSC:
         else:
             self.explained_variance = False
 
-    def correct(self, X, wavenumbers):
+    def transform(self, X, wavenumbers):
         # wavenumber have to be input as sorted
         # compute average spectrum from the reference
 
@@ -303,7 +294,7 @@ class ME_EMSC:
             RMSEall = np.full([spectra.shape[0]], np.nan)
             N = correctedFirsIteration.shape[0]
             for i in range(N):
-                if self.track_progress:
+                if self.verbose:
                     print(
                         "Corrected spectra ["
                         + int((i / N) * 20) * "#"
@@ -321,10 +312,10 @@ class ME_EMSC:
                             (1 / len(residualsFirstIteration[i, :]))
                             * np.sum(residualsFirstIteration[i, :] ** 2)
                         ),
-                        self.precision,
+                        self.tol,
                     )
                 ]
-                for iterationNumber in range(2, self.maxNiter + 1):
+                for iterationNumber in range(2, self.max_iter + 1):
                     try:
                         newSpec, res = iteration_step(
                             rawSpec,
@@ -336,18 +327,18 @@ class ME_EMSC:
                         )
                     except np.linalg.LinAlgError:
                         newspectra[i, :] = np.full(
-                            [rawSpec.shape[1] + self.ncomp + 2], np.nan
+                            [rawSpec.shape[1] + self.ncomp ], np.nan
                         )
                         residuals[i, :] = np.full(rawSpec.shape, np.nan)
                         RMSEall[i] = np.nan
                         break
                     corrSpec = newSpec[0, :]
                     rmse = round(
-                        np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2)), self.precision
+                        np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2)), self.tol
                     )
                     RMSE.append(rmse)
                     # Stop criterion
-                    if iterationNumber == self.maxNiter:
+                    if iterationNumber == self.max_iter:
                         newspectra[i, :] = corrSpec
                         numberOfIterations[i] = iterationNumber
                         residuals[i, :] = res
@@ -357,7 +348,7 @@ class ME_EMSC:
                         prevSpec = corrSpec
                         continue
                     elif (
-                        iterationNumber == self.maxNiter
+                        iterationNumber == self.max_iter
                         or iterationNumber == self.fixedNiter
                     ):
                         newspectra[i, :] = corrSpec
@@ -378,7 +369,7 @@ class ME_EMSC:
                             RMSEall[i] = RMSE[-2]
                             break
 
-            if self.track_progress:
+            if self.verbose:
                 print(f"\n ----- Finished correcting {N} spectra ----- \n")
             return newspectra, residuals, RMSEall, numberOfIterations
 
@@ -417,13 +408,13 @@ class ME_EMSC:
         M = make_emsc_model(badspectra, ref_X)
         # Correcting all spectra at once for the first iteration
         newspectra, res = cal_emsc(M, X)
-        if self.fixedNiter == 1 or self.maxNiter == 1:
+        if self.fixedNiter == 1 or self.max_iter == 1:
             res = np.array(res)
             numberOfIterations = np.ones([1, newspectra.shape[0]])
             RMSEall = [
                 round(
                     np.sqrt((1 / res.shape[1]) * np.sum(res[specNum, :] ** 2)),
-                    self.precision,
+                    self.tol,
                 )
                 for specNum in range(newspectra.shape[0])
             ]
