@@ -1,103 +1,122 @@
 import os
-DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
+import collections
 
+import pytest
 import numpy as np
-from numpy.testing import assert_array_almost_equal, assert_almost_equal
+from numpy.testing import assert_array_almost_equal
 import pandas as pd
 
 from biospectools.preprocessing.emsc import emsc
 
 
-def test_multiplicative_correction():
-    n_channels = 100
-
-    base_spectrum = np.random.uniform(0, 2, n_channels)
-    spectra = np.array([
-        base_spectrum * 1,
-        base_spectrum * 3,
-        base_spectrum * 5,
-    ])
-    wavenumbers = np.array(range(n_channels))
-    corrected_spectra = emsc(spectra, wavenumbers)
-
-    assert_array_almost_equal(corrected_spectra[0], base_spectrum * 3)
-    assert_array_almost_equal(corrected_spectra[1], base_spectrum * 3)
-    assert_array_almost_equal(corrected_spectra[2], base_spectrum * 3)
+DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
+EmscResult = collections.namedtuple('EmscResult', ['corrs', 'coefs'])
 
 
-def test_reference_spectrum():
-    n_channels = 100
+@pytest.fixture
+def wavenumbers():
+    return np.linspace(500, 3500, 100)
 
-    base_spectrum = np.random.uniform(0, 2, n_channels)
-    spectra = np.array([
-        base_spectrum * 1,
-        base_spectrum * 3,
-        base_spectrum * 5,
-    ])
-    wavenumbers = np.array(range(n_channels))
-
-    corrected_spectra = emsc(spectra, wavenumbers, reference=base_spectrum)
-
-    assert_array_almost_equal(corrected_spectra[0], base_spectrum)
-    assert_array_almost_equal(corrected_spectra[1], base_spectrum)
-    assert_array_almost_equal(corrected_spectra[2], base_spectrum)
+@pytest.fixture
+def norm_wns(wavenumbers):
+    half_rng = np.abs(wavenumbers[0] - wavenumbers[-1]) / 2
+    return (wavenumbers - np.mean(wavenumbers)) / half_rng
 
 
-def test_linear_correction():
-    n_channels = 100
-
-    base_spectrum = np.random.uniform(0, 2, n_channels)
-    linear_coef = -0.6135
-
-    spectra = np.array([
-        base_spectrum * 1,
-        base_spectrum * 3,
-        base_spectrum * 5 + np.linspace(-1, 1, 100) * linear_coef,
-    ])
-    wavenumbers = np.array(range(n_channels))
-    corrected_spectra, coefs = emsc(spectra, wavenumbers,
-                                    reference=base_spectrum,
-                                    return_coefs=True)
-
-    assert_array_almost_equal(corrected_spectra[0], base_spectrum)
-    assert_array_almost_equal(corrected_spectra[1], base_spectrum)
-    assert_array_almost_equal(corrected_spectra[2], base_spectrum)
-
-    # check linear coefs
-    assert_almost_equal(coefs[0, 2], 0)
-    assert_almost_equal(coefs[1, 2], 0)
-    assert_almost_equal(coefs[2, 2], linear_coef)
+@pytest.fixture
+def base_spectrum(wavenumbers):
+    return np.random.uniform(0, 2, len(wavenumbers))
 
 
-def test_constituents():
-    n_channels = 100
+@pytest.fixture
+def constituent(wavenumbers):
+    return np.random.uniform(0, 2, len(wavenumbers))
 
-    base_spectrum = np.random.uniform(0, 2, n_channels)
-    constituent = np.random.uniform(0, 2, n_channels)
 
-    spectra = np.array([
-        base_spectrum,
-        base_spectrum * 3 + constituent * 2 + np.linspace(-1, 1, n_channels) * 4
-    ])
-    constituents = np.array([
-        constituent
-    ])
-    wavenumbers = np.array(range(n_channels))
+@pytest.fixture
+def spectra(base_spectrum):
+    return np.array([base_spectrum, base_spectrum, base_spectrum])
 
-    corrected_spectra, coefs = emsc(spectra, wavenumbers,
-                                    reference=base_spectrum,
-                                    constituents=constituents,
-                                    return_coefs=True)
 
-    assert_array_almost_equal(corrected_spectra[0], base_spectrum)
-    assert_array_almost_equal(corrected_spectra[1], base_spectrum)
+@pytest.fixture
+def mult_coefs():
+    return np.array([1, 3, 5])[:, None]
 
-    # check coefs
-    assert_almost_equal(coefs[1, 0], 3)
-    assert_almost_equal(coefs[1, 1], 2)
-    assert_almost_equal(coefs[1, 2], 0)
-    assert_almost_equal(coefs[1, 3], 4)
-    assert_almost_equal(coefs[1, 4], 0)
+
+@pytest.fixture
+def linear_coefs():
+    return np.array([0, -0.616, 2])[:, None]
+
+
+@pytest.fixture
+def constituent_coefs():
+    return np.array([0, -1.5, 3])[:, None]
+
+
+@pytest.fixture
+def multiplied_spectra(spectra, mult_coefs):
+    return spectra * mult_coefs
+
+
+@pytest.fixture
+def spectra_linear_effect(norm_wns, spectra, linear_coefs):
+    return spectra + norm_wns * linear_coefs
+
+
+@pytest.fixture
+def spectra_with_constituent(spectra, constituent, constituent_coefs):
+    return spectra + constituent * constituent_coefs
+
+
+@pytest.fixture
+def mult_corrected(wavenumbers, multiplied_spectra):
+    return EmscResult(*emsc(multiplied_spectra, wavenumbers, return_coefs=True))
+
+
+@pytest.fixture
+def mult_corrected_with_reference(
+        wavenumbers, base_spectrum, multiplied_spectra):
+    return EmscResult(*emsc(multiplied_spectra, wavenumbers,
+                            reference=base_spectrum, return_coefs=True))
+
+@pytest.fixture
+def linear_corrected(
+        wavenumbers, base_spectrum, spectra_linear_effect):
+    return EmscResult(*emsc(spectra_linear_effect, wavenumbers,
+                            reference=base_spectrum, return_coefs=True))
+
+
+@pytest.fixture
+def constituent_corrected(
+        wavenumbers, base_spectrum, spectra_with_constituent, constituent):
+    return EmscResult(*emsc(
+        spectra_with_constituent, wavenumbers, poly_order=None,
+        reference=base_spectrum, constituents=constituent[None],
+        return_coefs=True))
+
+
+def test_multiplicative_correction(spectra, mult_corrected, mult_coefs):
+    mean = mult_coefs.mean()
+    assert_array_almost_equal(mult_corrected.corrs, spectra * mean)
+    assert_array_almost_equal(mult_corrected.coefs[:, [0]] * mean, mult_coefs)
+
+
+def test_multiplicative_correction_with_reference(
+        spectra, mult_corrected_with_reference, mult_coefs):
+    assert_array_almost_equal(mult_corrected_with_reference.corrs, spectra)
+    assert_array_almost_equal(
+        mult_corrected_with_reference.coefs[:, [0]], mult_coefs)
+
+
+def test_linear_correction(spectra, linear_corrected, linear_coefs):
+    assert_array_almost_equal(linear_corrected.corrs, spectra)
+    assert_array_almost_equal(linear_corrected.coefs[:, [2]], linear_coefs)
+
+
+def test_constituents(spectra, constituent_corrected, constituent_coefs):
+    assert_array_almost_equal(constituent_corrected.corrs, spectra)
+    assert_array_almost_equal(
+        constituent_corrected.coefs[:, [1]], constituent_coefs)
 
 
 def test_emsc_parameters():
