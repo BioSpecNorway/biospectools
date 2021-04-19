@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.signal import hilbert
 from sklearn.decomposition import TruncatedSVD
 from biospectools.physics.misc import calculate_complex_n
 
@@ -174,7 +173,6 @@ class ME_EMSC:
         self.ncomp = ncomp
         self.verbose = verbose
         self.max_iter = max_iter
-        self.fixed_iter = False
 
         self.n0 = n0
         self.a = a
@@ -276,9 +274,9 @@ class ME_EMSC:
             M = make_emsc_model(badspectra, reference)
 
             # calculate parameters and corrected spectra
-            newspectrum, res = cal_emsc(M, spectrum)
+            new_spectrum, res = cal_emsc(M, spectrum)
 
-            return newspectrum, res
+            return new_spectrum, res
 
         def iterate(
             spectra,
@@ -338,6 +336,7 @@ class ME_EMSC:
                         np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2)), self.tol
                     )
                     rmse_list.append(rmse)
+
                     # Stop criterion
                     if iter_number == self.max_iter:
                         new_spectra[i, :] = corr_spec
@@ -345,16 +344,7 @@ class ME_EMSC:
                         residuals[i, :] = res
                         rmse_all[i] = rmse_list[-1]
                         break
-                    elif self.fixed_iter and iter_number < self.fixed_iter:
-                        prev_spec = corr_spec
-                        continue
-                    elif iter_number == self.max_iter or iter_number == self.fixed_iter:
-                        new_spectra[i, :] = corr_spec
-                        number_of_iterations[i] = iter_number
-                        residuals[i, :] = res
-                        rmse_all[i] = rmse_list[-1]
-                        break
-                    elif iter_number > 2 and self.fixed_iter == False:
+                    elif iter_number > 2:
                         if rmse == rmse_list[-2] and rmse == rmse_list[-3]:
                             new_spectra[i, :] = corr_spec
                             number_of_iterations[i] = iter_number
@@ -406,7 +396,7 @@ class ME_EMSC:
         M = make_emsc_model(badspectra, ref_x)
         # Correcting all spectra at once for the first iteration
         new_spectra, res = cal_emsc(M, X)
-        if self.fixed_iter == 1 or self.max_iter == 1:
+        if self.max_iter == 1:
             res = np.array(res)
             number_of_iterations = np.ones([1, new_spectra.shape[0]])
             rmse_all = [
