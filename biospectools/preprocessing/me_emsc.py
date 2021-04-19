@@ -174,6 +174,7 @@ class ME_EMSC:
         self.ncomp = ncomp
         self.verbose = verbose
         self.max_iter = max_iter
+        self.fixed_iter = False
 
         self.n0 = n0
         self.a = a
@@ -188,12 +189,12 @@ class ME_EMSC:
 
         explained_variance = 99.96
         if self.ncomp == 0:
-            ref_X = np.atleast_2d(spectra_mean(np.expand_dims(self.reference, axis=0)))
+            ref_x = np.atleast_2d(spectra_mean(np.expand_dims(self.reference, axis=0)))
             wavenumbers_ref = np.array(sorted(self.wn_reference))
-            ref_X = interpolate_to_data(self.wn_reference.T, ref_X, wavenumbers_ref.T)
-            ref_X = ref_X[0]
+            ref_x = interpolate_to_data(self.wn_reference.T, ref_x, wavenumbers_ref.T)
+            ref_x = ref_x[0]
             self.ncomp = cal_ncomp(
-                ref_X, wavenumbers_ref, explained_variance, self.alpha0, self.gamma
+                ref_x, wavenumbers_ref, explained_variance, self.alpha0, self.gamma
             )
         else:
             self.explained_variance = False
@@ -205,30 +206,30 @@ class ME_EMSC:
         if (wavenumbers[1] - wavenumbers[0]) < 0:
             raise ValueError("wavenumbers must be ascending")
 
-        def make_basic_emsc_mod(ref_X):
+        def make_basic_emsc_mod(ref):
             N = wavenumbers.shape[0]
             m0 = -2.0 / (wavenumbers[0] - wavenumbers[N - 1])
             c_coeff = 0.5 * (wavenumbers[0] + wavenumbers[N - 1])
-            M_basic = []
+            m_basic = []
             for x in range(0, 3):
-                M_basic.append((m0 * (wavenumbers - c_coeff)) ** x)
-            M_basic.append(ref_X)  # always add reference spectrum to the model
-            M_basic = np.vstack(M_basic).T
-            return M_basic
+                m_basic.append((m0 * (wavenumbers - c_coeff)) ** x)
+            m_basic.append(ref)  # always add reference spectrum to the model
+            m_basic = np.vstack(m_basic).T
+            return m_basic
 
-        def cal_emsc_basic(M_basic, spectrum):
-            m = np.linalg.lstsq(M_basic, spectrum, rcond=-1)[0]
+        def cal_emsc_basic(m_basic, spectrum):
+            m = np.linalg.lstsq(m_basic, spectrum, rcond=-1)[0]
             corrected = spectrum
             for x in range(0, 3):
-                corrected = corrected - (m[x] * M_basic[:, x])
+                corrected = corrected - (m[x] * m_basic[:, x])
             corrected = corrected / m[3]
             scaled_spectrum = corrected
             return scaled_spectrum
 
-        def make_emsc_model(badspectra, referenceSpec):
+        def make_emsc_model(badspectra, reference_spec):
             M = np.ones([len(wavenumbers), self.ncomp + 2])
             M[:, 1 : self.ncomp + 1] = np.array([spectrum for spectrum in badspectra.T])
-            M[:, self.ncomp + 1] = referenceSpec
+            M[:, self.ncomp + 1] = reference_spec
             return M
 
         def cal_emsc(M, X):
@@ -247,14 +248,14 @@ class ME_EMSC:
             res = X - np.dot(params, M.T)
             return correctedspectra, res
 
-        def iteration_step(spectrum, reference, wavenumbers, M_basic, alpha0, gamma):
+        def iteration_step(spectrum, reference, wavenumbers, m_basic, alpha0, gamma):
             # scale with basic EMSC:
-            reference = cal_emsc_basic(M_basic, reference)
+            reference = cal_emsc_basic(m_basic, reference)
             if np.all(np.isnan(reference)):
                 raise np.linalg.LinAlgError()
 
             # Apply weights
-            reference = reference * wei_X
+            reference = reference * wei_x
             reference = reference[0]
 
             # set negative parts to zero
@@ -281,18 +282,18 @@ class ME_EMSC:
 
         def iterate(
             spectra,
-            correctedFirsIteration,
-            residualsFirstIteration,
+            corrected_first_iter,
+            residual_first_iter,
             wavenumbers,
-            M_basic,
+            m_basic,
             alpha0,
             gamma,
         ):
-            newspectra = np.full(correctedFirsIteration.shape, np.nan)
-            numberOfIterations = np.full(spectra.shape[0], np.nan)
+            new_spectra = np.full(corrected_first_iter.shape, np.nan)
+            number_of_iterations = np.full(spectra.shape[0], np.nan)
             residuals = np.full(spectra.shape, np.nan)
-            RMSEall = np.full([spectra.shape[0]], np.nan)
-            N = correctedFirsIteration.shape[0]
+            rmse_all = np.full([spectra.shape[0]], np.nan)
+            N = corrected_first_iter.shape[0]
             for i in range(N):
                 if self.verbose:
                     print(
@@ -302,126 +303,123 @@ class ME_EMSC:
                         + f"] [{i}/{N}]",
                         end="\r",
                     )
-                corrSpec = correctedFirsIteration[i]
-                prevSpec = corrSpec
-                rawSpec = spectra[i, :]
-                rawSpec = rawSpec.reshape(1, -1)
-                RMSE = [
+                corr_spec = corrected_first_iter[i]
+                prev_spec = corr_spec
+                raw_spec = spectra[i, :]
+                raw_spec = raw_spec.reshape(1, -1)
+                rmse_list = [
                     round(
                         np.sqrt(
-                            (1 / len(residualsFirstIteration[i, :]))
-                            * np.sum(residualsFirstIteration[i, :] ** 2)
+                            (1 / len(residual_first_iter[i, :]))
+                            * np.sum(residual_first_iter[i, :] ** 2)
                         ),
                         self.tol,
                     )
                 ]
-                for iterationNumber in range(2, self.max_iter + 1):
+                for iter_number in range(2, self.max_iter + 1):
                     try:
-                        newSpec, res = iteration_step(
-                            rawSpec,
-                            corrSpec[: -self.ncomp - 2],
+                        new_spec, res = iteration_step(
+                            raw_spec,
+                            corr_spec[: -self.ncomp - 2],
                             wavenumbers,
-                            M_basic,
+                            m_basic,
                             alpha0,
                             gamma,
                         )
                     except np.linalg.LinAlgError:
-                        newspectra[i, :] = np.full(
-                            [rawSpec.shape[1] + self.ncomp ], np.nan
+                        new_spectra[i, :] = np.full(
+                            [raw_spec.shape[1] + self.ncomp], np.nan
                         )
-                        residuals[i, :] = np.full(rawSpec.shape, np.nan)
-                        RMSEall[i] = np.nan
+                        residuals[i, :] = np.full(raw_spec.shape, np.nan)
+                        rmse_all[i] = np.nan
                         break
-                    corrSpec = newSpec[0, :]
+                    corr_spec = new_spec[0, :]
                     rmse = round(
                         np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2)), self.tol
                     )
-                    RMSE.append(rmse)
+                    rmse_list.append(rmse)
                     # Stop criterion
-                    if iterationNumber == self.max_iter:
-                        newspectra[i, :] = corrSpec
-                        numberOfIterations[i] = iterationNumber
+                    if iter_number == self.max_iter:
+                        new_spectra[i, :] = corr_spec
+                        number_of_iterations[i] = iter_number
                         residuals[i, :] = res
-                        RMSEall[i] = RMSE[-1]
+                        rmse_all[i] = rmse_list[-1]
                         break
-                    elif self.fixedNiter and iterationNumber < self.fixedNiter:
-                        prevSpec = corrSpec
+                    elif self.fixed_iter and iter_number < self.fixed_iter:
+                        prev_spec = corr_spec
                         continue
-                    elif (
-                        iterationNumber == self.max_iter
-                        or iterationNumber == self.fixedNiter
-                    ):
-                        newspectra[i, :] = corrSpec
-                        numberOfIterations[i] = iterationNumber
+                    elif iter_number == self.max_iter or iter_number == self.fixed_iter:
+                        new_spectra[i, :] = corr_spec
+                        number_of_iterations[i] = iter_number
                         residuals[i, :] = res
-                        RMSEall[i] = RMSE[-1]
+                        rmse_all[i] = rmse_list[-1]
                         break
-                    elif iterationNumber > 2 and self.fixedNiter == False:
-                        if rmse == RMSE[-2] and rmse == RMSE[-3]:
-                            newspectra[i, :] = corrSpec
-                            numberOfIterations[i] = iterationNumber
+                    elif iter_number > 2 and self.fixed_iter == False:
+                        if rmse == rmse_list[-2] and rmse == rmse_list[-3]:
+                            new_spectra[i, :] = corr_spec
+                            number_of_iterations[i] = iter_number
                             residuals[i, :] = res
-                            RMSEall[i] = RMSE[-1]
+                            rmse_all[i] = rmse_list[-1]
                             break
-                        if rmse > RMSE[-2]:
-                            newspectra[i, :] = prevSpec
-                            numberOfIterations[i] = iterationNumber - 1
-                            RMSEall[i] = RMSE[-2]
+                        if rmse > rmse_list[-2]:
+                            new_spectra[i, :] = prev_spec
+                            number_of_iterations[i] = iter_number - 1
+                            rmse_all[i] = rmse_list[-2]
                             break
 
             if self.verbose:
                 print(f"\n ----- Finished correcting {N} spectra ----- \n")
-            return newspectra, residuals, RMSEall, numberOfIterations
+            return new_spectra, residuals, rmse_all, number_of_iterations
 
-        ref_X = np.atleast_2d(spectra_mean(np.expand_dims(self.reference, axis=0)))
-        ref_X = interpolate_to_data(self.wn_reference.T, ref_X, wavenumbers.T)
-        ref_X = ref_X[0]
+        ref_x = np.atleast_2d(spectra_mean(np.expand_dims(self.reference, axis=0)))
+        ref_x = interpolate_to_data(self.wn_reference.T, ref_x, wavenumbers.T)
+        ref_x = ref_x[0]
 
         if self.weights:
-            wei_X = self.weights
+            wei_x = self.weights
         else:
-            wei_X = np.ones((1, len(wavenumbers)))
+            wei_x = np.ones((1, len(wavenumbers)))
 
-        ref_X = ref_X * wei_X
-        ref_X = ref_X[0]
+        ref_x = ref_x * wei_x
+        ref_x = ref_x[0]
         if self.positive_ref:
-            ref_X[ref_X < 0] = 0
+            ref_x[ref_x < 0] = 0
 
         resonant = True  # Possibility for using the 2008 version
 
         if resonant:
             # if this should be any point, we need to terminate after
             # 1 iteration for the non-resonant one
-            nprs, nkks = calculate_complex_n(ref_X, wavenumbers)
+            nprs, nkks = calculate_complex_n(ref_x, wavenumbers)
         else:
             npr = np.zeros(len(wavenumbers))
             nprs = npr / (wavenumbers * 100)
             nkks = np.zeros(len(wavenumbers))
 
         # For the first iteration, make basic EMSC model
-        M_basic = make_basic_emsc_mod(ref_X)
+        m_basic = make_basic_emsc_mod(ref_x)
         # Calculate scattering curves for ME-EMSC
         qext = calculate_qext_curves(nprs, nkks, self.alpha0, self.gamma, wavenumbers)
-        qext = orthogonalize_qext(qext, ref_X)
+        qext = orthogonalize_qext(qext, ref_x)
         badspectra = compress_mie_curves(qext, self.ncomp)
         # Establish ME-EMSC model
-        M = make_emsc_model(badspectra, ref_X)
+        M = make_emsc_model(badspectra, ref_x)
         # Correcting all spectra at once for the first iteration
-        newspectra, res = cal_emsc(M, X)
-        if self.fixedNiter == 1 or self.max_iter == 1:
+        new_spectra, res = cal_emsc(M, X)
+        if self.fixed_iter == 1 or self.max_iter == 1:
             res = np.array(res)
-            numberOfIterations = np.ones([1, newspectra.shape[0]])
-            RMSEall = [
+            number_of_iterations = np.ones([1, new_spectra.shape[0]])
+            rmse_all = [
                 round(
                     np.sqrt((1 / res.shape[1]) * np.sum(res[specNum, :] ** 2)),
                     self.tol,
                 )
-                for specNum in range(newspectra.shape[0])
+                for specNum in range(new_spectra.shape[0])
             ]
-            return newspectra, res, RMSEall, numberOfIterations
+            return new_spectra, res, rmse_all, number_of_iterations
 
         # Iterate
-        newspectra, residuals, RMSEall, numberOfIterations = iterate(
-            X, newspectra, res, wavenumbers, M_basic, self.alpha0, self.gamma
+        new_spectra, residuals, rmse_all, number_of_iterations = iterate(
+            X, new_spectra, res, wavenumbers, m_basic, self.alpha0, self.gamma
         )
-        return newspectra, residuals, RMSEall, numberOfIterations
+        return new_spectra, residuals, rmse_all, number_of_iterations

@@ -30,8 +30,8 @@ def adjustWavenumbers(RefSpec, wnRefSpec, RawSpec, wnRawSpec):
     return RefSpecFitted, RawSpecFitted, wn
 
 
-matplotlib.use("TkAgg")
-plt.style.use("ggplot")
+# matplotlib.use("TkAgg")
+# plt.style.use("ggplot")
 
 raw_data = loadmat("data/memsc_test_data/measuredSpectra.mat")
 
@@ -61,19 +61,20 @@ model = ME_EMSC(
     n0=np.linspace(1.1, 1.4, 10),
     a=np.linspace(2, 7.1, 10),
     max_iter=max_iter,
-    precision=4,
-    track_progress=True,
+    tol=4,
+    verbose=True,
 )
 
 t = time.time()
 
-correction, residuals, RMSE, iterations = model.correct(raw, wn)
+correction, residuals, RMSE, iterations = model.transform(raw, wn)
 
 print(f"Correction lasted {time.time() - t:.2f} seconds")
 
 corrected_spectra = correction[:, : raw.shape[1]]
 emsc_parameters = correction[:, raw.shape[1] :]
 
+"""
 for spectrum in corrected_spectra:
     plt.plot(wn, spectrum)
 plt.title("Corrected Spectra")
@@ -94,3 +95,4 @@ plt.title("Histogram of RMSE")
 plt.xlabel(r"RMSE", fontsize=24)
 plt.ylabel("Number of Spectra", fontsize=20)
 plt.show()
+"""
