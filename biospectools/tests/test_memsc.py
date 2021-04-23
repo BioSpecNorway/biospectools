@@ -1,98 +1,165 @@
-from biospectools.preprocessing.me_emsc import ME_EMSC
-from pkg_resources import resource_filename as rs_path
+import unittest
 import numpy as np
-from scipy.io import loadmat
-from scipy.interpolate import interp1d
-import matplotlib.pyplot as plt
-import matplotlib
-import time
-
-import biospectools.data
+from ME_EMSC import ME_EMSC
 
 
-def adjustWavenumbers(RefSpec, wnRefSpec, RawSpec, wnRawSpec):
-    minWavenumber = max(min(wnRefSpec), min(wnRawSpec))
-    maxWavenumber = min(max(wnRefSpec), max(wnRawSpec))
-    i1 = np.argmin(abs(wnRefSpec - minWavenumber))
-    i2 = np.argmin(abs(wnRefSpec - maxWavenumber))
-    RefSpec = RefSpec[:, i1:i2]
-    wnRefSpec = wnRefSpec[i1:i2]
-    j1 = np.argmin(abs(wnRawSpec - minWavenumber))
-    j2 = np.argmin(abs(wnRawSpec - maxWavenumber))
-    RawSpec = RawSpec[:, j1:j2]
-    wnRawSpec = wnRawSpec[j1:j2]
+class TestME_EMSC(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
 
-    RefSpecFitted = interp1d(wnRefSpec, RefSpec)(wnRawSpec[1:])
+        path2data1 = "data/memsc_test_data/MieStd1_rawSpec.csv"
+        path2data2 = "data/memsc_test_data/MieStd2_refSpec.csv"
+        path2data3 = "data/memsc_test_data/MieStd3_corr.csv"
+        path2data4 = "data/memsc_test_data/MieStd4_param.csv"
+        path2data5 = "data/memsc_test_data/MieStd5_residuals.csv"
+        path2data6 = "data/memsc_test_data/MieStd6_niter.csv"
+        path2data7 = "data/memsc_test_data/MieStd7_RMSE.csv"
 
-    RawSpecFitted = RawSpec[:, 1:]
-    wn = wnRawSpec[1:]
+        v = np.loadtxt(path2data1, usecols=np.arange(1, 779), delimiter=",")
+        cls.wnS = v[0]
+        cls.Spectra = np.vstack((v[1], v[1]))
 
-    return RefSpecFitted, RawSpecFitted, wn
+        v = np.loadtxt(path2data2, usecols=np.arange(1, 752), delimiter=",")
+        cls.wnM = v[0]
+        cls.Matrigel = v[1].reshape(1, -1)
+        cls.reference = cls.Matrigel
+        cls.wn_ref = cls.wnM
+
+        v = np.loadtxt(path2data3, usecols=np.arange(1, 40), delimiter=",")
+        cls.corr_default_20th_elem = v[0]
+        cls.corr_14ncomp_20th_elem = v[1]
+        cls.corr_fixed_iter3_20th_elem = v[2]
+
+        v = np.loadtxt(path2data4, usecols=np.arange(1, 17), delimiter=",")
+        cls.param_default_20th_elem = v[0][~np.isnan(v[0])]
+        cls.param_14ncomp_20th_elem = v[1]
+        cls.param_fixed_iter3_20th_elem = v[2][~np.isnan(v[2])]
+
+        v = np.loadtxt(path2data5, usecols=np.arange(1, 40), delimiter=",")
+        cls.res_default_20th_elem = v[0]
+        cls.res_14ncomp_20th_elem = v[1]
+        cls.res_fixed_iter3_20th_elem = v[2]
+
+        cls.numiter_std = np.loadtxt(
+            path2data6, usecols=(1,), delimiter=",", dtype="int64"
+        )
+        cls.RMSE_std = np.loadtxt(
+            path2data7, usecols=(1,), delimiter=",", dtype="float"
+        )
+
+        cls.numiter_std = np.array([cls.numiter_std, cls.numiter_std]).T
+        cls.RMSE_std = np.array([cls.RMSE_std, cls.RMSE_std]).T
+
+        f = ME_EMSC(
+            reference=cls.reference,
+            wn_reference=cls.wn_ref,
+            ncomp=False,
+            weights=False,
+            max_iter=45,
+        )
+        cls.f1data, cls.residuals, cls.RMSE, cls.iterations = f.correct(
+            cls.Spectra, cls.wnS
+        )
+
+        f2 = ME_EMSC(
+            reference=cls.reference, wn_reference=cls.wn_ref, ncomp=14
+        )  # With weights
+        cls.f2data, cls.residuals, cls.RMSE2, cls.iterations2 = f2.correct(
+            cls.Spectra, cls.wnS
+        )
+
+        f3 = ME_EMSC(
+            reference=cls.reference, wn_reference=cls.wn_ref, ncomp=False, fixed_iter=1
+        )
+        cls.f3data, cls.residuals, cls.RMSE3, cls.iterations3 = f3.correct(
+            cls.Spectra, cls.wnS
+        )
+
+    def disabled_test_plotting(self):
+        import matplotlib.pyplot as plt
+
+        # Default parameters
+        plt.figure()
+        plt.plot(self.wnS[0::20], self.f1data[0, 0::20].T, label="python")
+        plt.plot(self.wnS[0::20], self.corr_default_20th_elem, label="matlab")
+        plt.plot(
+            self.wnS[0::20],
+            self.f1data[0, 0::20].T[:, 0] - self.corr_default_20th_elem,
+            label="diff",
+        )
+        plt.legend()
+        plt.title("Comparison Matlab/Python - default parameters")
+
+        # 14 principal components
+        plt.figure()
+        plt.plot(self.wnS[0::20], self.f2data[0, 0::20].T, label="python")
+        plt.plot(self.wnS[0::20], self.corr_14ncomp_20th_elem, label="matlab")
+        plt.plot(
+            self.wnS[0::20],
+            self.f2data[0, 0::20].T[:, 0] - self.corr_14ncomp_20th_elem,
+            label="diff",
+        )
+        plt.legend()
+        plt.title("Comparison Matlab/Python - 14 principal components")
+
+        # Fixed iteration number 3
+        plt.figure()
+        plt.plot(self.wnS[0::20], self.f3data[0, 0::20].T, label="python")
+        plt.plot(self.wnS[0::20], self.corr_fixed_iter3_20th_elem, label="matlab")
+        plt.plot(
+            self.wnS[0::20],
+            self.f3data[0, 0::20].T[:, 0] - self.corr_fixed_iter3_20th_elem,
+            label="diff",
+        )
+        plt.legend()
+        plt.title("Comparison Matlab/Python - fixed iterations 3")
+        plt.show()
+
+    def test_correction_output(self):
+
+        lol1 = self.f1data[0, : self.Spectra.shape[1]]
+        lol2 = self.f2data[0, : self.Spectra.shape[1]]
+        lol3 = self.f3data[0, : self.Spectra.shape[1]]
+        np.testing.assert_almost_equal(self.corr_default_20th_elem, lol1[0::20].T)
+        np.testing.assert_almost_equal(self.corr_14ncomp_20th_elem, lol2[0::20].T)
+        np.testing.assert_almost_equal(self.corr_fixed_iter3_20th_elem, lol3[0::20].T)
+
+    def test_EMSC_parameters(self):
+        np.testing.assert_almost_equal(
+            abs(self.f1data[0, self.Spectra.shape[1] :]),
+            abs(self.param_default_20th_elem),
+        )
+        np.testing.assert_almost_equal(
+            abs(self.f2data[0, self.Spectra.shape[1] :]),
+            abs(self.param_14ncomp_20th_elem),
+        )
+        np.testing.assert_almost_equal(
+            abs(self.f3data[0, self.Spectra.shape[1] :]),
+            abs(self.param_fixed_iter3_20th_elem),
+        )
+
+    def test_number_iterations(self):
+        numiter = np.vstack((self.iterations, self.iterations2, self.iterations3))
+        np.testing.assert_equal(numiter, self.numiter_std)
+
+    def test_RMSE(self):
+        RMSE = np.array([self.RMSE, self.RMSE2, self.RMSE3])
+        np.testing.assert_equal(RMSE, self.RMSE_std)
+
+    def test_same_data_reference(self):
+        # it was crashing before
+        f = ME_EMSC(reference=self.reference, wn_reference=self.wn_ref)
+        _ = f.correct(self.reference, self.wnM)
+
+    def test_short_reference(self):
+        wnMshort = self.wnM[0::30]
+        Matrigelshort = self.Matrigel[0, 0::30]
+        Matrigelshort = Matrigelshort.reshape(-1, 1).T
+        # it was crashing before
+        f = ME_EMSC(reference=Matrigelshort, wn_reference=wnMshort)
+        _ = f.correct(self.Spectra, self.wnS)
 
 
-# matplotlib.use("TkAgg")
-# plt.style.use("ggplot")
-
-raw_data = loadmat("data/memsc_test_data/measuredSpectra.mat")
-
-wn_raw = raw_data["Spectra"][0][0][1].astype("float64")
-raw = raw_data["Spectra"][0][0][0]
-wn_ref, ref = biospectools.data.load_matrigel_spectrum()
-ref = ref[None]
-
-print(
-    f"Shape of ndarray with Referance Spectrum: {ref.shape}\n"
-    f"Shape of ndarray with Reference Spectrum's Wavenumbers: {wn_ref.shape}\n"
-    f"Shape of ndarray with Raw Data: {raw.shape}\n"
-    f"Shape of ndarray with Raw Data's Wavenumbers: {wn_raw.shape}"
-)
-
-ref, raw, wn = adjustWavenumbers(ref, wn_ref, raw, wn_raw)
-
-print(f"Adjust wavenumbers of Raw and Referance Spectra [wn.shape={wn.shape}]\n")
-
-ref = ref / np.max(ref)
-
-max_iter = 15
-model = ME_EMSC(
-    reference=ref.squeeze(),
-    wn_reference=wn,
-    ncomp=False,
-    n0=np.linspace(1.1, 1.4, 10),
-    a=np.linspace(2, 7.1, 10),
-    max_iter=max_iter,
-    tol=4,
-    verbose=True,
-)
-
-t = time.time()
-
-correction, residuals, RMSE, iterations = model.transform(raw, wn)
-
-print(f"Correction lasted {time.time() - t:.2f} seconds")
-
-corrected_spectra = correction[:, : raw.shape[1]]
-emsc_parameters = correction[:, raw.shape[1] :]
-
-"""
-for spectrum in corrected_spectra:
-    plt.plot(wn, spectrum)
-plt.title("Corrected Spectra")
-plt.xlabel(r"$\tilde{\nu}_n$", fontsize=24)
-plt.ylabel("A", rotation=0, fontsize=20, labelpad=15)
-plt.gca().invert_xaxis()
-plt.gca().tick_params(axis="both", which="major", labelsize=20)
-plt.show()
-
-plt.hist(iterations, bins=max_iter)
-plt.title("Histogram of Iterations Until Convergence")
-plt.xlabel(r"Number of Iterations", fontsize=24)
-plt.ylabel("Number of Spectra", fontsize=20)
-plt.show()
-
-plt.hist(RMSE, bins=30)
-plt.title("Histogram of RMSE")
-plt.xlabel(r"RMSE", fontsize=24)
-plt.ylabel("Number of Spectra", fontsize=20)
-plt.show()
-"""
+if __name__ == "__main__":
+    unittest.main()
