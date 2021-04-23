@@ -44,6 +44,7 @@ print(
 )
 
 ref, raw, wn = adjustWavenumbers(ref, wn_ref, raw, wn_raw)
+print(raw.shape, ref.shape, wn.shape)
 
 print(f"Adjust wavenumbers of Raw and Referance Spectra [wn.shape={wn.shape}]\n")
 
@@ -52,7 +53,7 @@ ref = ref / np.max(ref)
 max_iter = 15
 model = ME_EMSC(
     reference=ref.squeeze(),
-    wn_reference=wn,
+    wavenumbers=wn,
     ncomp=False,
     n0=np.linspace(1.1, 1.4, 10),
     a=np.linspace(2, 7.1, 10),
@@ -63,7 +64,7 @@ model = ME_EMSC(
 
 t = time.time()
 
-correction, residuals, RMSE, iterations = model.transform(raw, wn)
+correction, residuals, RMSE, iterations = model.transform(raw)
 
 print(f"Correction lasted {time.time() - t:.2f} seconds")
 

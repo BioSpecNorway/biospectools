@@ -82,7 +82,7 @@ class ME_EMSC:
     def __init__(
         self,
         reference: np.ndarray = None,
-        wn_reference: np.ndarray = None,
+        wavenumbers: np.ndarray = None,
         weights: np.ndarray = None,
         ncomp: int = 0,
         n0: np.ndarray = np.linspace(1.1, 1.4, 10),
@@ -97,11 +97,11 @@ class ME_EMSC:
         if reference is None:
             raise ValueError("reference spectrum must be defined")
 
-        if (wn_reference[1] - wn_reference[0]) < 0:
+        if (wavenumbers[1] - wavenumbers[0]) < 0:
             raise ValueError("wn_reference must be ascending")
 
         self.reference = reference
-        self.wn_reference = wn_reference
+        self.wavenumbers = wavenumbers
         self.positive_ref = positive_ref
         self.tol = tol
         self.weights = weights
@@ -124,7 +124,7 @@ class ME_EMSC:
         if self.ncomp == 0:
             self.ncomp = cal_ncomp(
                 self.reference,
-                self.wn_reference,
+                self.wavenumbers,
                 explained_variance,
                 self.alpha0,
                 self.gamma,
@@ -132,20 +132,17 @@ class ME_EMSC:
         else:
             self.explained_variance = False
 
-    def transform(self, X: np.ndarray, wavenumbers: np.ndarray) -> tuple:
+    def transform(self, X: np.ndarray) -> tuple:
         # wavenumber have to be input as sorted
         # compute average spectrum from the reference
 
-        if (wavenumbers[1] - wavenumbers[0]) < 0:
-            raise ValueError("wavenumbers must be ascending")
-
         def make_basic_emsc_mod(ref: np.ndarray) -> np.ndarray:
-            N = wavenumbers.shape[0]
-            m0 = -2.0 / (wavenumbers[0] - wavenumbers[N - 1])
-            c_coeff = 0.5 * (wavenumbers[0] + wavenumbers[N - 1])
+            N = self.wavenumbers.shape[0]
+            m0 = -2.0 / (self.wavenumbers[0] - self.wavenumbers[N - 1])
+            c_coeff = 0.5 * (self.wavenumbers[0] + self.wavenumbers[N - 1])
             m_basic = []
             for x in range(0, 3):
-                m_basic.append((m0 * (wavenumbers - c_coeff)) ** x)
+                m_basic.append((m0 * (self.wavenumbers - c_coeff)) ** x)
             m_basic.append(ref)  # always add reference spectrum to the model
             m_basic = np.vstack(m_basic).T
             return m_basic
@@ -162,31 +159,34 @@ class ME_EMSC:
         def make_emsc_model(
             badspectra: np.ndarray, reference_spec: np.ndarray
         ) -> np.ndarray:
-            M = np.ones([len(wavenumbers), self.ncomp + 2])
-            M[:, 1 : self.ncomp + 1] = np.array([spectrum for spectrum in badspectra.T])
-            M[:, self.ncomp + 1] = reference_spec
-            return M
+            model = np.ones([len(self.wavenumbers), self.ncomp + 2])
+            model[:, 1 : self.ncomp + 1] = np.array(
+                [spectrum for spectrum in badspectra.T]
+            )
+            model[:, self.ncomp + 1] = reference_spec
+            return model
 
-        def cal_emsc(M: np.ndarray, X: np.ndarray) -> tuple:
-            correctedspectra = np.zeros((X.shape[0], X.shape[1] + M.shape[1]))
-            for i, rawspectrum in enumerate(X):
-                m = np.linalg.lstsq(M, rawspectrum, rcond=-1)[0]
+        def cal_emsc(model: np.ndarray, spectra: np.ndarray) -> tuple:
+            correctedspectra = np.zeros(
+                (spectra.shape[0], spectra.shape[1] + model.shape[1])
+            )
+            for i, rawspectrum in enumerate(spectra):
+                m = np.linalg.lstsq(model, rawspectrum, rcond=-1)[0]
                 corrected = rawspectrum
                 for x in range(0, 1 + self.ncomp):
-                    corrected = corrected - (m[x] * M[:, x])
+                    corrected = corrected - (m[x] * model[:, x])
                 corrected = corrected / m[1 + self.ncomp]
                 corrected[np.isinf(corrected)] = np.nan
                 corrected = np.hstack((corrected, m))
                 correctedspectra[i] = corrected
 
             params = correctedspectra[:, -(self.ncomp + 2) :]
-            res = X - np.dot(params, M.T)
+            res = spectra - np.dot(params, model.T)
             return correctedspectra, res
 
         def iteration_step(
             spectrum: np.ndarray,
             reference: np.ndarray,
-            wavenumbers: np.ndarray,
             m_basic: np.ndarray,
             alpha0: np.ndarray,
             gamma: np.ndarray,
@@ -208,8 +208,8 @@ class ME_EMSC:
                 reference = nonzero_reference
 
             # calculate Qext-curves
-            nprs, nkks = calculate_complex_n(nonzero_reference, wavenumbers)
-            qext = calculate_qext_curves(nprs, nkks, alpha0, gamma, wavenumbers)
+            nprs, nkks = calculate_complex_n(nonzero_reference, self.wavenumbers)
+            qext = calculate_qext_curves(nprs, nkks, alpha0, gamma, self.wavenumbers)
             qext = orthogonalize_qext(qext, reference)
 
             badspectra = compress_mie_curves(qext, self.ncomp)
@@ -226,7 +226,6 @@ class ME_EMSC:
             spectra: np.ndarray,
             corrected_first_iter: np.ndarray,
             residual_first_iter: np.ndarray,
-            wavenumbers: np.ndarray,
             m_basic: np.ndarray,
             alpha0: np.ndarray,
             gamma: np.ndarray,
@@ -260,7 +259,6 @@ class ME_EMSC:
                         new_spec, res = iteration_step(
                             raw_spec,
                             corr_spec[: -self.ncomp - 2],
-                            wavenumbers,
                             m_basic,
                             alpha0,
                             gamma,
@@ -306,7 +304,7 @@ class ME_EMSC:
         if self.weights:
             wei_x = self.weights
         else:
-            wei_x = np.ones((1, len(wavenumbers)))
+            wei_x = np.ones((1, len(self.wavenumbers)))
 
         ref_x = self.reference[None] * wei_x
         ref_x = ref_x[0]
@@ -318,16 +316,18 @@ class ME_EMSC:
         if resonant:
             # if this should be any point, we need to terminate after
             # 1 iteration for the non-resonant one
-            nprs, nkks = calculate_complex_n(ref_x, wavenumbers)
+            nprs, nkks = calculate_complex_n(ref_x, self.wavenumbers)
         else:
-            npr = np.zeros(len(wavenumbers))
-            nprs = npr / (wavenumbers * 100)
-            nkks = np.zeros(len(wavenumbers))
+            npr = np.zeros(len(self.wavenumbers))
+            nprs = npr / (self.wavenumbers * 100)
+            nkks = np.zeros(len(self.wavenumbers))
 
         # For the first iteration, make basic EMSC model
         m_basic = make_basic_emsc_mod(ref_x)
         # Calculate scattering curves for ME-EMSC
-        qext = calculate_qext_curves(nprs, nkks, self.alpha0, self.gamma, wavenumbers)
+        qext = calculate_qext_curves(
+            nprs, nkks, self.alpha0, self.gamma, self.wavenumbers
+        )
         qext = orthogonalize_qext(qext, ref_x)
         badspectra = compress_mie_curves(qext, self.ncomp)
         # Establish ME-EMSC model
@@ -345,6 +345,6 @@ class ME_EMSC:
 
         # Iterate
         new_spectra, residuals, rmse_all, number_of_iterations = iterate(
-            X, new_spectra, res, wavenumbers, m_basic, self.alpha0, self.gamma
+            X, new_spectra, res, m_basic, self.alpha0, self.gamma
         )
         return new_spectra, residuals, rmse_all, number_of_iterations
