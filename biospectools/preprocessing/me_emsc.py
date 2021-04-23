@@ -3,83 +3,6 @@ from sklearn.decomposition import TruncatedSVD
 from biospectools.physics.misc import calculate_complex_n
 
 
-def fill_edges_1d(l):
-    """Replace (inplace!) NaN at sides with the closest value"""
-    loc = np.where(~np.isnan(l))[0]
-    if len(loc):
-        fi, li = loc[[0, -1]]
-        l[:fi] = l[fi]
-        l[li + 1 :] = l[li]
-
-
-def fill_edges(mat):
-    """Replace (inplace!) NaN at sides with the closest value"""
-    for l in mat:
-        fill_edges_1d(l)
-
-
-def nan_extend_edges_and_interpolate(xs, X):
-    """
-    Handle NaNs at the edges are handled as with savgol_filter mode nearest:
-    the edge values are interpolated. NaNs in the middle are interpolated
-    so that they do not propagate.
-    """
-    nans = None
-    if np.any(np.isnan(X)):
-        nans = np.isnan(X)
-        X = X.copy()
-        xs, xsind, mon, X = transform_to_sorted_wavenumbers(xs, X)
-        fill_edges(X)
-        X = interp1d_with_unknowns_numpy(xs[xsind], X, xs[xsind])
-        X = transform_back_to_features(xsind, mon, X)
-    return X, nans
-
-
-def spectra_mean(X):
-    return np.nanmean(X, axis=0, dtype=np.float64)
-
-
-def interpolate_to_data(other_xs, other_data, wavenumbers):
-    # all input data needs to be interpolated (and NaNs removed)
-    interpolated = interp1d_with_unknowns_numpy(other_xs, other_data, wavenumbers)
-    # we know that X is not NaN. same handling of reference as of X
-    interpolated, _ = nan_extend_edges_and_interpolate(wavenumbers, interpolated)
-    return interpolated
-
-
-def interp1d_with_unknowns_numpy(x, ys, points, kind="linear"):
-    if kind != "linear":
-        raise NotImplementedError
-    out = np.zeros((len(ys), len(points))) * np.nan
-    sorti = np.argsort(x)
-    x = x[sorti]
-    for i, y in enumerate(ys):
-        y = y[sorti]
-        nan = np.isnan(y)
-        xt = x[~nan]
-        yt = y[~nan]
-        # do not interpolate unknowns at the edges
-        if len(xt):  # check if all values are removed
-            bhg = np.interp(points.squeeze(), xt, yt, left=np.nan, right=np.nan)
-            out[i] = bhg.squeeze()
-    return out
-
-
-def transform_to_sorted_wavenumbers(xs, X):
-    xsind = np.argsort(xs)
-    mon = is_increasing(xsind)
-    X = X if mon else X[:, xsind]
-    return xs, xsind, mon, X
-
-
-def is_increasing(a):
-    return np.all(np.diff(a) >= 0)
-
-
-def transform_back_to_features(xsind, mon, X):
-    return X if mon else X[:, np.argsort(xsind)]
-
-
 def calculate_qext_curves(nkks, nprs, alpha0, gamma, wavenumbers):
     gamma_nprs = (1 + np.multiply.outer(gamma, nprs)) * (wavenumbers * 100)
     tanbeta = nkks / np.add.outer((1 / gamma.T), nprs)
@@ -154,7 +77,7 @@ class ME_EMSC:
         a: np.ndarray = np.linspace(2, 7.1, 10),
         h: float = 0.25,
         max_iter: int = 30,
-        tol: int = 4,
+        tol: float = 1e-4,
         verbose: bool = False,
         positive_ref: bool = True,
     ):
@@ -166,9 +89,9 @@ class ME_EMSC:
             raise ValueError("wn_reference must be ascending")
 
         self.reference = reference
-        self.tol = tol
         self.wn_reference = wn_reference
         self.positive_ref = positive_ref
+        self.tol = tol
         self.weights = weights
         self.ncomp = ncomp
         self.verbose = verbose
@@ -187,12 +110,12 @@ class ME_EMSC:
 
         explained_variance = 99.96
         if self.ncomp == 0:
-            ref_x = np.atleast_2d(spectra_mean(np.expand_dims(self.reference, axis=0)))
-            wavenumbers_ref = np.array(sorted(self.wn_reference))
-            ref_x = interpolate_to_data(self.wn_reference.T, ref_x, wavenumbers_ref.T)
-            ref_x = ref_x[0]
             self.ncomp = cal_ncomp(
-                ref_x, wavenumbers_ref, explained_variance, self.alpha0, self.gamma
+                self.reference,
+                self.wn_reference,
+                explained_variance,
+                self.alpha0,
+                self.gamma,
             )
         else:
             self.explained_variance = False
@@ -306,12 +229,9 @@ class ME_EMSC:
                 raw_spec = spectra[i, :]
                 raw_spec = raw_spec.reshape(1, -1)
                 rmse_list = [
-                    round(
-                        np.sqrt(
-                            (1 / len(residual_first_iter[i, :]))
-                            * np.sum(residual_first_iter[i, :] ** 2)
-                        ),
-                        self.tol,
+                    np.sqrt(
+                        (1 / len(residual_first_iter[i, :]))
+                        * np.sum(residual_first_iter[i, :] ** 2)
                     )
                 ]
                 for iter_number in range(2, self.max_iter + 1):
@@ -332,9 +252,7 @@ class ME_EMSC:
                         rmse_all[i] = np.nan
                         break
                     corr_spec = new_spec[0, :]
-                    rmse = round(
-                        np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2)), self.tol
-                    )
+                    rmse = np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2))
                     rmse_list.append(rmse)
 
                     # Stop criterion
@@ -345,7 +263,10 @@ class ME_EMSC:
                         rmse_all[i] = rmse_list[-1]
                         break
                     elif iter_number > 2:
-                        if rmse == rmse_list[-2] and rmse == rmse_list[-3]:
+                        if (
+                            abs(rmse - rmse_list[-2]) < self.tol
+                            and abs(rmse - rmse_list[-3]) < self.tol
+                        ):
                             new_spectra[i, :] = corr_spec
                             number_of_iterations[i] = iter_number
                             residuals[i, :] = res
@@ -361,16 +282,12 @@ class ME_EMSC:
                 print(f"\n ----- Finished correcting {N} spectra ----- \n")
             return new_spectra, residuals, rmse_all, number_of_iterations
 
-        ref_x = np.atleast_2d(spectra_mean(np.expand_dims(self.reference, axis=0)))
-        ref_x = interpolate_to_data(self.wn_reference.T, ref_x, wavenumbers.T)
-        ref_x = ref_x[0]
-
         if self.weights:
             wei_x = self.weights
         else:
             wei_x = np.ones((1, len(wavenumbers)))
 
-        ref_x = ref_x * wei_x
+        ref_x = self.reference[None] * wei_x
         ref_x = ref_x[0]
         if self.positive_ref:
             ref_x[ref_x < 0] = 0

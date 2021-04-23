@@ -47,15 +47,15 @@ print(
     f"Shape of ndarray with Raw Data's Wavenumbers: {wn_raw.shape}"
 )
 
-max_iter = 15
 ref, raw, wn = adjustWavenumbers(ref, wn_ref, raw, wn_raw)
 
 print(f"Adjust wavenumbers of Raw and Referance Spectra [wn.shape={wn.shape}]\n")
 
 ref = ref / np.max(ref)
 
+max_iter = 15
 model = ME_EMSC(
-    reference=ref,
+    reference=ref.squeeze(),
     wn_reference=wn,
     ncomp=False,
     n0=np.linspace(1.1, 1.4, 10),
