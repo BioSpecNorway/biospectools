@@ -3,7 +3,13 @@ from sklearn.decomposition import TruncatedSVD
 from biospectools.physics.misc import calculate_complex_n
 
 
-def calculate_qext_curves(nkks, nprs, alpha0, gamma, wavenumbers):
+def calculate_qext_curves(
+    nkks: np.ndarray,
+    nprs: np.ndarray,
+    alpha0: np.ndarray,
+    gamma: np.ndarray,
+    wavenumbers: np.ndarray,
+) -> np.ndarray:
     gamma_nprs = (1 + np.multiply.outer(gamma, nprs)) * (wavenumbers * 100)
     tanbeta = nkks / np.add.outer((1 / gamma.T), nprs)
 
@@ -28,7 +34,7 @@ def calculate_qext_curves(nkks, nprs, alpha0, gamma, wavenumbers):
     return q_matrix
 
 
-def orthogonalize_qext(qext, reference):
+def orthogonalize_qext(qext: np.ndarray, reference: np.ndarray):
     m = np.dot(reference, reference)
     norm = np.sqrt(m)
     rnorm = reference / norm
@@ -37,7 +43,7 @@ def orthogonalize_qext(qext, reference):
     return qext_orthogonalized
 
 
-def compress_mie_curves(qext_orthogonalized, num_comp):
+def compress_mie_curves(qext_orthogonalized: np.ndarray, num_comp: int) -> np.ndarray:
     svd = TruncatedSVD(
         n_components=num_comp, n_iter=7, random_state=42
     )  # Self.ncomp needs to be specified
@@ -46,7 +52,13 @@ def compress_mie_curves(qext_orthogonalized, num_comp):
     return badspectra
 
 
-def cal_ncomp(reference, wavenumbers, explained_var_lim, alpha0, gamma):
+def cal_ncomp(
+    reference: np.ndarray,
+    wavenumbers: np.ndarray,
+    explained_var_lim: float,
+    alpha0: np.ndarray,
+    gamma: np.ndarray,
+) -> int:
     nprs, nkks = calculate_complex_n(reference, wavenumbers)
     qext = calculate_qext_curves(nprs, nkks, alpha0, gamma, wavenumbers)
     qext_orthogonalized = orthogonalize_qext(qext, reference)
@@ -120,14 +132,14 @@ class ME_EMSC:
         else:
             self.explained_variance = False
 
-    def transform(self, X, wavenumbers):
+    def transform(self, X: np.ndarray, wavenumbers: np.ndarray) -> tuple:
         # wavenumber have to be input as sorted
         # compute average spectrum from the reference
 
         if (wavenumbers[1] - wavenumbers[0]) < 0:
             raise ValueError("wavenumbers must be ascending")
 
-        def make_basic_emsc_mod(ref):
+        def make_basic_emsc_mod(ref: np.ndarray) -> np.ndarray:
             N = wavenumbers.shape[0]
             m0 = -2.0 / (wavenumbers[0] - wavenumbers[N - 1])
             c_coeff = 0.5 * (wavenumbers[0] + wavenumbers[N - 1])
@@ -138,7 +150,7 @@ class ME_EMSC:
             m_basic = np.vstack(m_basic).T
             return m_basic
 
-        def cal_emsc_basic(m_basic, spectrum):
+        def cal_emsc_basic(m_basic: np.ndarray, spectrum: np.ndarray) -> np.ndarray:
             m = np.linalg.lstsq(m_basic, spectrum, rcond=-1)[0]
             corrected = spectrum
             for x in range(0, 3):
@@ -147,13 +159,15 @@ class ME_EMSC:
             scaled_spectrum = corrected
             return scaled_spectrum
 
-        def make_emsc_model(badspectra, reference_spec):
+        def make_emsc_model(
+            badspectra: np.ndarray, reference_spec: np.ndarray
+        ) -> np.ndarray:
             M = np.ones([len(wavenumbers), self.ncomp + 2])
             M[:, 1 : self.ncomp + 1] = np.array([spectrum for spectrum in badspectra.T])
             M[:, self.ncomp + 1] = reference_spec
             return M
 
-        def cal_emsc(M, X):
+        def cal_emsc(M: np.ndarray, X: np.ndarray) -> tuple:
             correctedspectra = np.zeros((X.shape[0], X.shape[1] + M.shape[1]))
             for i, rawspectrum in enumerate(X):
                 m = np.linalg.lstsq(M, rawspectrum, rcond=-1)[0]
@@ -169,7 +183,14 @@ class ME_EMSC:
             res = X - np.dot(params, M.T)
             return correctedspectra, res
 
-        def iteration_step(spectrum, reference, wavenumbers, m_basic, alpha0, gamma):
+        def iteration_step(
+            spectrum: np.ndarray,
+            reference: np.ndarray,
+            wavenumbers: np.ndarray,
+            m_basic: np.ndarray,
+            alpha0: np.ndarray,
+            gamma: np.ndarray,
+        ) -> tuple:
             # scale with basic EMSC:
             reference = cal_emsc_basic(m_basic, reference)
             if np.all(np.isnan(reference)):
@@ -202,14 +223,14 @@ class ME_EMSC:
             return new_spectrum, res
 
         def iterate(
-            spectra,
-            corrected_first_iter,
-            residual_first_iter,
-            wavenumbers,
-            m_basic,
-            alpha0,
-            gamma,
-        ):
+            spectra: np.ndarray,
+            corrected_first_iter: np.ndarray,
+            residual_first_iter: np.ndarray,
+            wavenumbers: np.ndarray,
+            m_basic: np.ndarray,
+            alpha0: np.ndarray,
+            gamma: np.ndarray,
+        ) -> tuple:
             new_spectra = np.full(corrected_first_iter.shape, np.nan)
             number_of_iterations = np.full(spectra.shape[0], np.nan)
             residuals = np.full(spectra.shape, np.nan)
@@ -317,10 +338,7 @@ class ME_EMSC:
             res = np.array(res)
             number_of_iterations = np.ones([1, new_spectra.shape[0]])
             rmse_all = [
-                round(
-                    np.sqrt((1 / res.shape[1]) * np.sum(res[specNum, :] ** 2)),
-                    self.tol,
-                )
+                np.sqrt((1 / res.shape[1]) * np.sum(res[specNum, :] ** 2))
                 for specNum in range(new_spectra.shape[0])
             ]
             return new_spectra, res, rmse_all, number_of_iterations
