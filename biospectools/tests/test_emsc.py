@@ -11,6 +11,29 @@ from biospectools.preprocessing.emsc import emsc
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
 
+@pytest.fixture
+def emsc_data():
+    return pd.read_excel(
+        os.path.join(DATA_PATH, 'emsc_testdata.xlsx'),
+        index_col=0, header=None)
+
+
+@pytest.fixture
+def emsc_data_params():
+    return pd.read_excel(
+        os.path.join(DATA_PATH, 'emsc_testdata_parameters.xlsx'),
+        index_col=0, header=None)
+
+
+@pytest.fixture
+def emsc_quartic_params(emsc_data_params):
+    return emsc_data_params.iloc[0:2].values
+
+
+@pytest.fixture
+def emsc_weights_params(emsc_data_params):
+    return emsc_data_params.iloc[2:4].values
+
 
 @pytest.fixture
 def wavenumbers():
@@ -116,66 +139,37 @@ class TestEmscFunction:
         assert_array_almost_equal(linear_corrected.corrs, spectra)
         assert_array_almost_equal(linear_corrected.coefs[:, [2]], linear_coefs)
 
-
     def test_constituents(
             self, spectra, constituent_corrected, constituent_coefs):
         assert_array_almost_equal(constituent_corrected.corrs, spectra)
         assert_array_almost_equal(
             constituent_corrected.coefs[:, [1]], constituent_coefs)
 
-    def test_emsc_parameters(self):
+    def test_quartic_correction(self, emsc_data, emsc_quartic_params):
         """
         Test against gold standard: EMSC implementation in Matlab
         from Achim Kohler (06.02.2020)
         """
-        data_path = os.path.join(DATA_PATH, 'emsc_testdata.xlsx')
-        params_path = os.path.join(DATA_PATH, 'emsc_testdata_parameters.xlsx')
-        emsc_data = pd.read_excel(data_path, index_col=0, header=None)
-        emsc_data_params = pd.read_excel(params_path, index_col=0, header=None)
-
-        wns = emsc_data.iloc[0].values
-        raw_spectra = emsc_data.iloc[2:4].values
-        weights = emsc_data.iloc[1].values
-
-        quartic_params_standard = emsc_data_params.iloc[0:2].values
-        weigths_params_standard = emsc_data_params.iloc[2:4].values
-
-        _, quartic_params = emsc(raw_spectra, wns,
-                                 poly_order=4, return_coefs=True)
-        _, weights_params = emsc(raw_spectra, wns,
-                                 weights=weights, return_coefs=True)
-
-        # scale coefficients to Achim's implementation
-        quartic_params[:, 2] *= -1
-        quartic_params[:, 4] *= 2
-        weights_params[:, 2] *= -1
-
-        assert_array_almost_equal(quartic_params_standard[:, :-1], quartic_params[:, 1:])
-        assert_array_almost_equal(quartic_params_standard[:, -1], quartic_params[:, 0])
-        assert_array_almost_equal(weigths_params_standard[:, :-3], weights_params[:, 1:])
-        assert_array_almost_equal(weigths_params_standard[:, -3], weights_params[:, 0])
-
-    def test_quartic_correction(self):
-        """
-        Test against gold standard: EMSC implementation in Matlab
-        from Achim Kohler (06.02.2020)
-        """
-        emsc_data = pd.read_excel(os.path.join(DATA_PATH, 'emsc_testdata.xlsx'),
-                                  index_col=0, header=None)
-
         wns = emsc_data.iloc[0].values
         raw_spectra = emsc_data.iloc[2:4].values
 
         corrected_standard = emsc_data.iloc[4:6].values
         residuals_standard = emsc_data.iloc[6:8].values
 
-        corrected, residuals = emsc(raw_spectra, wns,
-                                    poly_order=4, return_residuals=True)
+        corrected, coefs, residuals = emsc(
+            raw_spectra, wns, poly_order=4,
+            return_coefs=True, return_residuals=True)
+
+        # scale coefficients to Achim's implementation
+        coefs[:, 2] *= -1
+        coefs[:, 4] *= 2
 
         assert_array_almost_equal(corrected, corrected_standard)
         assert_array_almost_equal(residuals, residuals_standard)
+        assert_array_almost_equal(emsc_quartic_params[:, :-1], coefs[:, 1:])
+        assert_array_almost_equal(emsc_quartic_params[:, -1], coefs[:, 0])
 
-    def test_weighting(self):
+    def test_weighting(self, emsc_data, emsc_weights_params):
         """
         Test against gold standard: EMSC implementation in Matlab
         from Achim Kohler (06.02.2020)
@@ -190,8 +184,14 @@ class TestEmscFunction:
         corrected_standard = emsc_data.iloc[8:10].values
         residuals_standard = emsc_data.iloc[10:12].values
 
-        corrected, residuals = emsc(raw_spectra, wns,
-                                    weights=weights, return_residuals=True)
+        corrected, coefs, residuals = emsc(
+            raw_spectra, wns, weights=weights,
+            return_coefs=True, return_residuals=True)
+
+        # scale coefficients to Achim's implementation
+        coefs[:, 2] *= -1
 
         assert_array_almost_equal(corrected, corrected_standard)
         assert_array_almost_equal(residuals, residuals_standard)
+        assert_array_almost_equal(emsc_weights_params[:, :-3], coefs[:, 1:])
+        assert_array_almost_equal(emsc_weights_params[:, -3], coefs[:, 0])
