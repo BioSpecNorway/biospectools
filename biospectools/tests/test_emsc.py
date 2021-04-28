@@ -7,6 +7,7 @@ from numpy.testing import assert_array_almost_equal
 import pandas as pd
 
 from biospectools.preprocessing.emsc import emsc
+from biospectools.preprocessing import EMSC
 
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
@@ -195,3 +196,119 @@ class TestEmscFunction:
         assert_array_almost_equal(residuals, residuals_standard)
         assert_array_almost_equal(emsc_weights_params[:, :-3], coefs[:, 1:])
         assert_array_almost_equal(emsc_weights_params[:, -3], coefs[:, 0])
+
+
+
+class TestEmscClass:
+
+    def test_multiplicative_correction(
+            self, wavenumbers, multiplied_spectra,
+            spectra, mult_coefs):
+        emsc = EMSC(multiplied_spectra.mean(axis=0), wavenumbers)
+        corrected = emsc.transform(multiplied_spectra)
+
+        mean = mult_coefs.mean()
+        assert_array_almost_equal(corrected, spectra * mean)
+        assert_array_almost_equal(emsc.scaling_coefs_ * mean, mult_coefs[:, 0])
+        assert_array_almost_equal(emsc.coefs_[:, 0] * mean, mult_coefs[:, 0])
+
+    def test_multiplicative_correction_with_reference(
+            self, wavenumbers, base_spectrum, multiplied_spectra,
+            spectra, mult_coefs):
+        emsc = EMSC(base_spectrum, wavenumbers)
+        corrected = emsc.transform(multiplied_spectra)
+
+        assert_array_almost_equal(corrected, spectra)
+        assert_array_almost_equal(emsc.scaling_coefs_, mult_coefs[:, 0])
+        assert_array_almost_equal(emsc.coefs_[:, 0], mult_coefs[:, 0])
+
+    def test_linear_correction(
+            self, wavenumbers, base_spectrum, spectra_linear_effect,
+            spectra, linear_coefs):
+        emsc = EMSC(base_spectrum, wavenumbers)
+        corrected = emsc.transform(spectra_linear_effect)
+
+        assert_array_almost_equal(corrected, spectra)
+        assert_array_almost_equal(
+            emsc.polynomial_coefs_[:, 1], linear_coefs[:, 0])
+        assert_array_almost_equal(emsc.coefs_[:, 2], linear_coefs[:, 0])
+        assert emsc.constituents_coefs_ is None
+
+    def test_constituents(
+            self, wavenumbers, base_spectrum,
+            spectra_with_constituent, constituent,
+            spectra, constituent_coefs):
+        emsc = EMSC(base_spectrum, wavenumbers,
+                    poly_order=None, constituents=constituent[None])
+        corrected = emsc.transform(spectra_with_constituent)
+
+        assert_array_almost_equal(corrected, spectra)
+        assert_array_almost_equal(
+            emsc.constituents_coefs_[:, 0], constituent_coefs[:, 0])
+        assert_array_almost_equal(emsc.coefs_[:, 1], constituent_coefs[:, 0])
+        assert emsc.polynomial_coefs_ is None
+
+    def test_emsc_parameters(self, emsc_data, emsc_quartic_params):
+        """
+        Test against gold standard: EMSC implementation in Matlab
+        from Achim Kohler (06.02.2020)
+        """
+        wns = emsc_data.iloc[0].values
+        raw_spectra = emsc_data.iloc[2:4].values
+        weights = emsc_data.iloc[1].values
+
+        _, quartic_params = emsc(raw_spectra, wns,
+                                 poly_order=4, return_coefs=True)
+        _, weights_params = emsc(raw_spectra, wns,
+                                 weights=weights, return_coefs=True)
+
+
+    def test_quartic_correction(self, emsc_data, emsc_quartic_params):
+        """
+        Test against gold standard: EMSC implementation in Matlab
+        from Achim Kohler (06.02.2020)
+        """
+        wns = emsc_data.iloc[0].values
+        raw_spectra = emsc_data.iloc[2:4].values
+
+        corrected_standard = emsc_data.iloc[4:6].values
+        residuals_standard = emsc_data.iloc[6:8].values
+
+        emsc = EMSC(raw_spectra.mean(axis=0), wns, poly_order=4)
+        corrected = emsc.transform(raw_spectra)
+
+        # scale coefficients to Achim's implementation
+        emsc.coefs_[:, 2] *= -1
+        emsc.coefs_[:, 4] *= 2
+
+        assert_array_almost_equal(corrected, corrected_standard)
+        assert_array_almost_equal(emsc.residuals_, residuals_standard)
+        assert_array_almost_equal(
+            emsc_quartic_params[:, :-1], emsc.polynomial_coefs_)
+        assert_array_almost_equal(
+            emsc_quartic_params[:, -1], emsc.scaling_coefs_)
+
+    def test_weighting(self, emsc_data, emsc_weights_params):
+        """
+        Test against gold standard: EMSC implementation in Matlab
+        from Achim Kohler (06.02.2020)
+        """
+        wns = emsc_data.iloc[0].values
+        raw_spectra = emsc_data.iloc[2:4].values
+        weights = emsc_data.iloc[1].values
+
+        corrected_standard = emsc_data.iloc[8:10].values
+        residuals_standard = emsc_data.iloc[10:12].values
+
+        emsc = EMSC(raw_spectra.mean(axis=0), wns, weights=weights)
+        corrected = emsc.transform(raw_spectra)
+
+        # scale coefficients to Achim's implementation
+        emsc.coefs_[:, 2] *= -1
+
+        assert_array_almost_equal(corrected, corrected_standard)
+        assert_array_almost_equal(emsc.residuals_, residuals_standard)
+        assert_array_almost_equal(
+            emsc_weights_params[:, :-3], emsc.polynomial_coefs_)
+        assert_array_almost_equal(
+            emsc_weights_params[:, -3], emsc.scaling_coefs_)
