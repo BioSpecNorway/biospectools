@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
+
 from biospectools.physics.misc import calculate_complex_n
 
 
@@ -90,6 +91,7 @@ class ME_EMSC:
         h: float = 0.25,
         max_iter: int = 30,
         tol: float = 1e-4,
+        precision: int = 16,
         verbose: bool = False,
         positive_ref: bool = True,
     ):
@@ -104,6 +106,7 @@ class ME_EMSC:
         self.wavenumbers = wavenumbers
         self.positive_ref = positive_ref
         self.tol = tol
+        self.precision = precision
         self.weights = weights
         self.ncomp = ncomp
         self.verbose = verbose
@@ -283,15 +286,27 @@ class ME_EMSC:
                         break
                     elif iter_number > 2:
                         if (
-                            abs(rmse - rmse_list[-2]) < self.tol
-                            and abs(rmse - rmse_list[-3]) < self.tol
+                            abs(rmse - rmse_list[-2]) <= self.tol
+                            and abs(rmse - rmse_list[-3]) <= self.tol
+                        ) or (
+                            (
+                                round(rmse, self.precision)
+                                == round(rmse_list[-2], self.precision)
+                            )
+                            and (
+                                round(rmse, self.precision)
+                                == round(rmse_list[-3], self.precision)
+                            )
                         ):
                             new_spectra[i, :] = corr_spec
                             number_of_iterations[i] = iter_number
                             residuals[i, :] = res
                             rmse_all[i] = rmse_list[-1]
                             break
-                        if rmse > rmse_list[-2]:
+                        # if (rmse > rmse_list[-2]) or (
+                        if round(rmse, self.precision) > round(
+                            rmse_list[-2], self.precision
+                        ):
                             new_spectra[i, :] = prev_spec
                             number_of_iterations[i] = iter_number - 1
                             rmse_all[i] = rmse_list[-2]
