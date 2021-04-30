@@ -109,6 +109,8 @@ class ME_EMSC:
         self.tol = tol
         self.precision = precision
         self.weights = weights
+        if self.weights is None:
+            self.weights = np.ones(len(self.reference))
         self.ncomp = ncomp
         self.verbose = verbose
         self.max_iter = max_iter
@@ -139,13 +141,7 @@ class ME_EMSC:
     def transform(self, X: np.ndarray) -> tuple:
         # wavenumber have to be input as sorted
         # compute average spectrum from the reference
-        if self.weights:
-            wei_x = self.weights
-        else:
-            wei_x = np.ones((1, len(self.wavenumbers)))
-
-        ref_x = self.reference[None] * wei_x
-        ref_x = ref_x[0]
+        ref_x = self.reference * self.weights
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
 
@@ -186,7 +182,7 @@ class ME_EMSC:
 
         # Iterate
         new_spectra, residuals, rmse_all, number_of_iterations = self._iterate(
-            X, new_spectra, res, basic_emsc, wei_x, self.alpha0, self.gamma
+            X, new_spectra, res, basic_emsc, self.alpha0, self.gamma
         )
         return new_spectra, residuals, rmse_all, number_of_iterations
 
@@ -196,7 +192,6 @@ class ME_EMSC:
             corrected_first_iter: np.ndarray,
             residual_first_iter: np.ndarray,
             basic_emsc: EMSC,
-            weights,
             alpha0: np.ndarray,
             gamma: np.ndarray,
     ) -> tuple:
@@ -230,7 +225,6 @@ class ME_EMSC:
                         raw_spec,
                         corr_spec[: -self.ncomp - 2],
                         basic_emsc,
-                        weights,
                         alpha0,
                         gamma,
                     )
@@ -289,7 +283,6 @@ class ME_EMSC:
             spectrum: np.ndarray,
             reference: np.ndarray,
             basic_emsc: EMSC,
-            weights: np.ndarray,
             alpha0: np.ndarray,
             gamma: np.ndarray,
     ) -> tuple:
@@ -299,8 +292,7 @@ class ME_EMSC:
             raise np.linalg.LinAlgError()
 
         # Apply weights
-        reference = reference * weights
-        reference = reference[0]
+        reference = reference * self.weights
 
         # set negative parts to zero
         nonzero_reference = reference.copy()

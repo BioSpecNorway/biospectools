@@ -59,7 +59,7 @@ class TestME_EMSC(unittest.TestCase):
             reference=cls.reference,
             wavenumbers=cls.wnS,
             ncomp=False,
-            weights=False,
+            weights=None,
             max_iter=45,
             precision=4,
             tol=1e-10,
