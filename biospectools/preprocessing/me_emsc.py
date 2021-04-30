@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
 
@@ -92,7 +94,7 @@ class ME_EMSC:
         h: float = 0.25,
         max_iter: int = 30,
         tol: float = 1e-4,
-        precision: int = 16,
+        precision: Optional[int] = None,
         verbose: bool = False,
         positive_ref: bool = True,
     ):
@@ -108,6 +110,9 @@ class ME_EMSC:
         self.positive_ref = positive_ref
         self.tol = tol
         self.precision = precision
+        if self.precision is not None:
+            self.precision = precision
+            self.tol = np.finfo(float).eps
         self.weights = weights
         if self.weights is None:
             self.weights = np.ones(len(self.reference))
@@ -247,31 +252,23 @@ class ME_EMSC:
                     rmse_all[i] = rmse_list[-1]
                     break
                 elif iter_number > 2:
-                    if (
-                            abs(rmse - rmse_list[-2]) <= self.tol
-                            and abs(rmse - rmse_list[-3]) <= self.tol
-                    ) or (
-                            (
-                                    round(rmse, self.precision)
-                                    == round(rmse_list[-2], self.precision)
-                            )
-                            and (
-                                    round(rmse, self.precision)
-                                    == round(rmse_list[-3], self.precision)
-                            )
-                    ):
+                    if self.precision is None:
+                        pp_rmse, p_rmse, rmse = rmse_list[-3:]
+                    else:
+                        pp_rmse, p_rmse, rmse = [round(r, self.precision)
+                                                 for r in rmse_list[-3:]]
+
+                    if rmse > p_rmse:
+                        new_spectra[i, :] = prev_spec
+                        number_of_iterations[i] = iter_number - 1
+                        rmse_all[i] = rmse_list[-2]
+                        break
+                    elif (p_rmse - rmse <= self.tol
+                          and pp_rmse - rmse <= self.tol):
                         new_spectra[i, :] = corr_spec
                         number_of_iterations[i] = iter_number
                         residuals[i, :] = res
                         rmse_all[i] = rmse_list[-1]
-                        break
-                    # if (rmse > rmse_list[-2]) or (
-                    if round(rmse, self.precision) > round(
-                            rmse_list[-2], self.precision
-                    ):
-                        new_spectra[i, :] = prev_spec
-                        number_of_iterations[i] = iter_number - 1
-                        rmse_all[i] = rmse_list[-2]
                         break
 
         if self.verbose:
