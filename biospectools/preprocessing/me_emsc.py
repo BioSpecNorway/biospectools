@@ -8,14 +8,14 @@ from biospectools.preprocessing import EMSC
 
 
 def calculate_qext_curves(
-    nkks: np.ndarray,
     nprs: np.ndarray,
+    nkks: np.ndarray,
     alpha0: np.ndarray,
     gamma: np.ndarray,
     wavenumbers: np.ndarray,
 ) -> np.ndarray:
-    gamma_nprs = (1 + np.multiply.outer(gamma, nprs)) * (wavenumbers * 100)
-    tanbeta = nkks / np.add.outer((1 / gamma.T), nprs)
+    gamma_nkks = (1 + np.multiply.outer(gamma, nkks)) * (wavenumbers * 100)
+    tanbeta = nprs / np.add.outer((1 / gamma.T), nkks)
 
     beta0 = np.arctan(tanbeta)
     cosB = np.cos(beta0)
@@ -27,7 +27,7 @@ def calculate_qext_curves(
     q_matrix = np.zeros((n_alpha * n_gamma, len(wavenumbers)))
 
     for i in range(n_alpha):
-        rho = alpha0[i] * gamma_nprs
+        rho = alpha0[i] * gamma_nkks
         rhocosB = cosB / rho
         q = 2.0 + (4 * rhocosB) * (
             -np.exp(-(rho) * (tanbeta))
