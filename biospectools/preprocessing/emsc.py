@@ -153,10 +153,13 @@ class EMSC:
         self.coefs_ = self.coefs_.T
 
     def _validate(self, spectra):
-        if self.poly_order is not None and self.poly_order < 0:
+        if (self.poly_order is not None
+                and self.poly_order < 0):
             raise ValueError(
                 'poly_order must be equal or greater than 0')
-        if self.poly_order is not None and self.wavenumbers is None:
+        if (self.poly_order is not None
+                and self.poly_order > 0
+                and self.wavenumbers is None):
             raise ValueError(
                 'wavenumbers must be specified when poly_order is given')
         if (self.wavenumbers is not None
