@@ -17,13 +17,12 @@ def get_imagpart(pure_absorbance, wavelength, radius, factor=1):
     :return:
     """
     if np.any(wavelength > 500):
-        logging.warning(
-            "Big wavelength occured: "
-            "Starting from the version 0.3.0 this method takes"
-            "wavelength instead of wavenumbers"
-        )
+        logging.warning('Big wavelength occured: '
+                        'Starting from the version 0.3.0 this method takes'
+                        'wavelength instead of wavenumbers')
     deff = np.pi / 2 * radius * factor
-    imagpart = (pure_absorbance * np.log(10)) / (4 * np.pi * deff / wavelength)
+    imagpart = (pure_absorbance * np.log(10)) / \
+               (4 * np.pi * deff / wavelength)
     return imagpart
 
 
@@ -38,7 +37,7 @@ def get_nkk(imag_part, wavelengths: np.ndarray, pad_size=200):
     """
     pad_last_axis = [(0, 0)] * imag_part.ndim
     pad_last_axis[-1] = (pad_size, pad_size)
-    nkk = np.imag(hilbert(np.pad(imag_part, pad_last_axis, mode="edge")))
+    nkk = np.imag(hilbert(np.pad(imag_part, pad_last_axis, mode='edge')))
     nkk = nkk[..., pad_size:-pad_size]
 
     wls_increase = wavelengths[..., 0] < wavelengths[..., -1]
@@ -50,7 +49,7 @@ def get_nkk(imag_part, wavelengths: np.ndarray, pad_size=200):
 
 
 def to_wavelength(wavenumbers):
-    return 10e3 / wavenumbers
+    return 10e+3 / wavenumbers
 
 
 def calculate_complex_n(ref_X, wavenumbers):
@@ -84,16 +83,12 @@ def calculate_complex_n(ref_X, wavenumbers):
 
 
 def to_wavenumbers(wavelength):
-    return 10e3 / wavelength
+    return 10e+3 / wavelength
 
 
-def get_qext(
-    wavelength: np.ndarray,
-    pure_absorbance: np.ndarray,
-    n0: float,
-    r: float,
-    mie_func=vdh.mie_complex,
-):
+def get_qext(wavelength: np.ndarray,
+             pure_absorbance: np.ndarray,
+             n0: float, r: float, mie_func=vdh.mie_complex):
     imagpart = get_imagpart(pure_absorbance, wavelength, r)
     nkk = get_nkk(imagpart, wavelength)
     ms = n0 + nkk + 1j * imagpart
