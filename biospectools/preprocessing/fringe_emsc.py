@@ -18,7 +18,7 @@ class FringeEMSC:
             emsc_weights=None,
             scale: bool = True,
             pad_length_multiplier: float = 5,
-            double_freq: bool = False,
+            double_freq: bool = True,
             window_function=windows.bartlett
     ):
         self.reference = np.asarray(reference)
