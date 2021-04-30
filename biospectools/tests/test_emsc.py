@@ -215,7 +215,7 @@ class TestEmscClass:
     def test_multiplicative_correction_with_reference(
             self, wavenumbers, base_spectrum, multiplied_spectra,
             spectra, mult_coefs):
-        emsc = EMSC(base_spectrum, wavenumbers)
+        emsc = EMSC(base_spectrum, poly_order=0)
         corrected = emsc.transform(multiplied_spectra)
 
         assert_array_almost_equal(corrected, spectra)

@@ -123,7 +123,7 @@ class EMSC:
         if self.constituents is not None:
             columns.extend(self.constituents)
         if self.poly_order is not None:
-            columns.append(np.ones_like(self.wavenumbers))
+            columns.append(np.ones_like(self.reference))
             if self.poly_order > 0:
                 n = self.poly_order + 1
                 self.norm_wns_ = self._normalize_wns()
