@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.decomposition import TruncatedSVD
 
 from biospectools.physics.misc import calculate_complex_n
+from biospectools.preprocessing import EMSC
 
 
 def calculate_qext_curves(
@@ -139,63 +140,15 @@ class ME_EMSC:
         # wavenumber have to be input as sorted
         # compute average spectrum from the reference
 
-        def make_basic_emsc_mod(ref: np.ndarray) -> np.ndarray:
-            N = self.wavenumbers.shape[0]
-            m0 = -2.0 / (self.wavenumbers[0] - self.wavenumbers[N - 1])
-            c_coeff = 0.5 * (self.wavenumbers[0] + self.wavenumbers[N - 1])
-            m_basic = []
-            for x in range(0, 3):
-                m_basic.append((m0 * (self.wavenumbers - c_coeff)) ** x)
-            m_basic.append(ref)  # always add reference spectrum to the model
-            m_basic = np.vstack(m_basic).T
-            return m_basic
-
-        def cal_emsc_basic(m_basic: np.ndarray, spectrum: np.ndarray) -> np.ndarray:
-            m = np.linalg.lstsq(m_basic, spectrum, rcond=-1)[0]
-            corrected = spectrum
-            for x in range(0, 3):
-                corrected = corrected - (m[x] * m_basic[:, x])
-            corrected = corrected / m[3]
-            scaled_spectrum = corrected
-            return scaled_spectrum
-
-        def make_emsc_model(
-            badspectra: np.ndarray, reference_spec: np.ndarray
-        ) -> np.ndarray:
-            model = np.ones([len(self.wavenumbers), self.ncomp + 2])
-            model[:, 1 : self.ncomp + 1] = np.array(
-                [spectrum for spectrum in badspectra.T]
-            )
-            model[:, self.ncomp + 1] = reference_spec
-            return model
-
-        def cal_emsc(model: np.ndarray, spectra: np.ndarray) -> tuple:
-            correctedspectra = np.zeros(
-                (spectra.shape[0], spectra.shape[1] + model.shape[1])
-            )
-            for i, rawspectrum in enumerate(spectra):
-                m = np.linalg.lstsq(model, rawspectrum, rcond=-1)[0]
-                corrected = rawspectrum
-                for x in range(0, 1 + self.ncomp):
-                    corrected = corrected - (m[x] * model[:, x])
-                corrected = corrected / m[1 + self.ncomp]
-                corrected[np.isinf(corrected)] = np.nan
-                corrected = np.hstack((corrected, m))
-                correctedspectra[i] = corrected
-
-            params = correctedspectra[:, -(self.ncomp + 2) :]
-            res = spectra - np.dot(params, model.T)
-            return correctedspectra, res
-
         def iteration_step(
             spectrum: np.ndarray,
             reference: np.ndarray,
-            m_basic: np.ndarray,
+            basic_emsc: EMSC,
             alpha0: np.ndarray,
             gamma: np.ndarray,
         ) -> tuple:
             # scale with basic EMSC:
-            reference = cal_emsc_basic(m_basic, reference)
+            reference = basic_emsc.transform(reference[None])[0]
             if np.all(np.isnan(reference)):
                 raise np.linalg.LinAlgError()
 
@@ -217,11 +170,12 @@ class ME_EMSC:
 
             badspectra = compress_mie_curves(qext, self.ncomp)
 
-            # build ME-EMSC model
-            M = make_emsc_model(badspectra, reference)
-
-            # calculate parameters and corrected spectra
-            new_spectrum, res = cal_emsc(M, spectrum)
+            emsc = EMSC(reference=reference, poly_order=0, constituents=badspectra)
+            new_spectrum = emsc.transform(spectrum)
+            # adapt EMSC results to code
+            res = emsc.residuals_
+            coefs = emsc.coefs_[:, [-1, *range(1, len(badspectra) + 1), 0]]
+            new_spectrum = np.concatenate((new_spectrum, coefs), axis=1)
 
             return new_spectrum, res
 
@@ -229,7 +183,7 @@ class ME_EMSC:
             spectra: np.ndarray,
             corrected_first_iter: np.ndarray,
             residual_first_iter: np.ndarray,
-            m_basic: np.ndarray,
+            basic_emsc: EMSC,
             alpha0: np.ndarray,
             gamma: np.ndarray,
         ) -> tuple:
@@ -262,7 +216,7 @@ class ME_EMSC:
                         new_spec, res = iteration_step(
                             raw_spec,
                             corr_spec[: -self.ncomp - 2],
-                            m_basic,
+                            basic_emsc,
                             alpha0,
                             gamma,
                         )
@@ -338,28 +292,31 @@ class ME_EMSC:
             nkks = np.zeros(len(self.wavenumbers))
 
         # For the first iteration, make basic EMSC model
-        m_basic = make_basic_emsc_mod(ref_x)
+        basic_emsc = EMSC(
+            ref_x, self.wavenumbers,
+            validate_state=False, rebuild_model=False)
+
         # Calculate scattering curves for ME-EMSC
         qext = calculate_qext_curves(
             nprs, nkks, self.alpha0, self.gamma, self.wavenumbers
         )
         qext = orthogonalize_qext(qext, ref_x)
         badspectra = compress_mie_curves(qext, self.ncomp)
-        # Establish ME-EMSC model
-        M = make_emsc_model(badspectra, ref_x)
-        # Correcting all spectra at once for the first iteration
-        new_spectra, res = cal_emsc(M, X)
+
+        emsc = EMSC(reference=ref_x, poly_order=0, constituents=badspectra)
+        new_spectra = emsc.transform(X)
+        # adapt EMSC results to code
+        res = emsc.residuals_
+        coefs = emsc.coefs_[:, [-1, *range(1, len(badspectra) + 1), 0]]
+        new_spectra = np.concatenate((new_spectra, coefs), axis=1)
+
         if self.max_iter == 1:
-            res = np.array(res)
             number_of_iterations = np.ones([1, new_spectra.shape[0]])
-            rmse_all = [
-                np.sqrt((1 / res.shape[1]) * np.sum(res[specNum, :] ** 2))
-                for specNum in range(new_spectra.shape[0])
-            ]
+            rmse_all = np.sqrt((res ** 2).sum(axis=-1) / res.shape[1])
             return new_spectra, res, rmse_all, number_of_iterations
 
         # Iterate
         new_spectra, residuals, rmse_all, number_of_iterations = iterate(
-            X, new_spectra, res, m_basic, self.alpha0, self.gamma
+            X, new_spectra, res, basic_emsc, self.alpha0, self.gamma
         )
         return new_spectra, residuals, rmse_all, number_of_iterations
