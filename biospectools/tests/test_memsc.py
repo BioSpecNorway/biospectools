@@ -64,7 +64,8 @@ class TestME_EMSC(unittest.TestCase):
             precision=4,
             tol=1e-10,
         )
-        cls.f1data, cls.residuals, cls.RMSE, cls.iterations = f.transform(cls.Spectra)
+        cls.f1data, cls.f1params, cls.residuals, cls.RMSE, cls.iterations = \
+            f.transform(cls.Spectra)
 
         f2 = ME_EMSC(
             reference=cls.reference,
@@ -73,9 +74,8 @@ class TestME_EMSC(unittest.TestCase):
             precision=4,
             tol=1e-10,
         )  # With weights
-        cls.f2data, cls.residuals, cls.RMSE2, cls.iterations2 = f2.transform(
-            cls.Spectra
-        )
+        cls.f2data, cls.f2params, cls.residuals, cls.RMSE2, cls.iterations2 = \
+            f2.transform(cls.Spectra)
 
         f3 = ME_EMSC(
             reference=cls.reference,
@@ -83,9 +83,8 @@ class TestME_EMSC(unittest.TestCase):
             ncomp=False,
             max_iter=1,
         )
-        cls.f3data, cls.residuals, cls.RMSE3, cls.iterations3 = f3.transform(
-            cls.Spectra
-        )
+        cls.f3data, cls.f3params, cls.residuals, cls.RMSE3, cls.iterations3 = \
+            f3.transform(cls.Spectra)
 
     def disabled_test_plotting(self):
         import matplotlib.pyplot as plt
@@ -129,25 +128,22 @@ class TestME_EMSC(unittest.TestCase):
 
     def test_correction_output(self):
         print("Test Correction")
-        lol1 = self.f1data[0, : self.Spectra.shape[1]]
-        lol2 = self.f2data[0, : self.Spectra.shape[1]]
-        lol3 = self.f3data[0, : self.Spectra.shape[1]]
-        np.testing.assert_almost_equal(self.corr_default_20th_elem, lol1[0::20].T)
-        np.testing.assert_almost_equal(self.corr_14ncomp_20th_elem, lol2[0::20].T)
-        np.testing.assert_almost_equal(self.corr_fixed_iter3_20th_elem, lol3[0::20].T)
+        np.testing.assert_almost_equal(self.corr_default_20th_elem, self.f1data[0, ::20].T)
+        np.testing.assert_almost_equal(self.corr_14ncomp_20th_elem, self.f2data[0, ::20].T)
+        np.testing.assert_almost_equal(self.corr_fixed_iter3_20th_elem, self.f3data[0, ::20].T)
 
     def test_EMSC_parameters(self):
         print("Test Parameters")
         np.testing.assert_almost_equal(
-            abs(self.f1data[0, self.Spectra.shape[1] :]),
+            abs(self.f1params[0]),
             abs(self.param_default_20th_elem),
         )
         np.testing.assert_almost_equal(
-            abs(self.f2data[0, self.Spectra.shape[1] :]),
+            abs(self.f2params[0]),
             abs(self.param_14ncomp_20th_elem),
         )
         np.testing.assert_almost_equal(
-            abs(self.f3data[0, self.Spectra.shape[1] :]),
+            abs(self.f3params[0]),
             abs(self.param_fixed_iter3_20th_elem),
         )
 

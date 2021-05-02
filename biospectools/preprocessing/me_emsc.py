@@ -178,23 +178,23 @@ class ME_EMSC:
         # adapt EMSC results to code
         res = emsc.residuals_
         coefs = emsc.coefs_[:, [-1, *range(1, len(badspectra) + 1), 0]]
-        new_spectra = np.concatenate((new_spectra, coefs), axis=1)
 
         if self.max_iter == 1:
             number_of_iterations = np.ones([1, new_spectra.shape[0]])
             rmse_all = np.sqrt((res ** 2).sum(axis=-1) / res.shape[1])
-            return new_spectra, res, rmse_all, number_of_iterations
+            return new_spectra, coefs, res, rmse_all, number_of_iterations
 
         # Iterate
-        new_spectra, residuals, rmse_all, number_of_iterations = self._iterate(
-            X, new_spectra, res, basic_emsc, self.alpha0, self.gamma
+        new_spectra, coefs, residuals, rmse_all, number_of_iterations = self._iterate(
+            X, new_spectra, coefs, res, basic_emsc, self.alpha0, self.gamma
         )
-        return new_spectra, residuals, rmse_all, number_of_iterations
+        return new_spectra, coefs, residuals, rmse_all, number_of_iterations
 
     def _iterate(
             self,
             spectra: np.ndarray,
             corrected_first_iter: np.ndarray,
+            coefs_first_iter: np.ndarray,
             residual_first_iter: np.ndarray,
             basic_emsc: EMSC,
             alpha0: np.ndarray,
@@ -202,6 +202,7 @@ class ME_EMSC:
     ) -> tuple:
         new_spectra = np.full(corrected_first_iter.shape, np.nan)
         number_of_iterations = np.full(spectra.shape[0], np.nan)
+        coefs = np.full((spectra.shape[0], self.ncomp + 2), np.nan)
         residuals = np.full(spectra.shape, np.nan)
         rmse_all = np.full([spectra.shape[0]], np.nan)
         N = corrected_first_iter.shape[0]
@@ -216,6 +217,7 @@ class ME_EMSC:
                 )
             corr_spec = corrected_first_iter[i]
             prev_spec = corr_spec
+            prev_coefs = coefs_first_iter[i]
             raw_spec = spectra[i, :]
             raw_spec = raw_spec.reshape(1, -1)
             rmse_list = [
@@ -226,17 +228,18 @@ class ME_EMSC:
             ]
             for iter_number in range(2, self.max_iter + 1):
                 try:
-                    new_spec, res = self._iteration_step(
+                    new_spec, new_coefs, res = self._iteration_step(
                         raw_spec,
-                        corr_spec[: -self.ncomp - 2],
+                        corr_spec,
                         basic_emsc,
                         alpha0,
                         gamma,
                     )
                 except np.linalg.LinAlgError:
                     new_spectra[i, :] = np.full(
-                        [raw_spec.shape[1] + self.ncomp], np.nan
+                        [raw_spec.shape[1]], np.nan
                     )
+                    coefs[i] = np.full(self.ncomp + 2, np.nan)
                     residuals[i, :] = np.full(raw_spec.shape, np.nan)
                     rmse_all[i] = np.nan
                     break
@@ -248,6 +251,7 @@ class ME_EMSC:
                 if iter_number == self.max_iter:
                     new_spectra[i, :] = corr_spec
                     number_of_iterations[i] = iter_number
+                    coefs[i] = new_coefs
                     residuals[i, :] = res
                     rmse_all[i] = rmse_list[-1]
                     break
@@ -260,6 +264,7 @@ class ME_EMSC:
 
                     if rmse > p_rmse:
                         new_spectra[i, :] = prev_spec
+                        coefs[i] = prev_coefs
                         number_of_iterations[i] = iter_number - 1
                         rmse_all[i] = rmse_list[-2]
                         break
@@ -267,13 +272,14 @@ class ME_EMSC:
                           and pp_rmse - rmse <= self.tol):
                         new_spectra[i, :] = corr_spec
                         number_of_iterations[i] = iter_number
+                        coefs[i] = new_coefs
                         residuals[i, :] = res
                         rmse_all[i] = rmse_list[-1]
                         break
 
         if self.verbose:
             print(f"\n ----- Finished correcting {N} spectra ----- \n")
-        return new_spectra, residuals, rmse_all, number_of_iterations
+        return new_spectra, coefs, residuals, rmse_all, number_of_iterations
 
     def _iteration_step(
             self,
@@ -310,6 +316,5 @@ class ME_EMSC:
         # adapt EMSC results to code
         res = emsc.residuals_
         coefs = emsc.coefs_[:, [-1, *range(1, len(badspectra) + 1), 0]]
-        new_spectrum = np.concatenate((new_spectrum, coefs), axis=1)
 
-        return new_spectrum, res
+        return new_spectrum, coefs, res
