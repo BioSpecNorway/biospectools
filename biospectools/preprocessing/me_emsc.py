@@ -52,8 +52,7 @@ def compress_mie_curves(qext_orthogonalized: np.ndarray, num_comp: int) -> np.nd
         n_components=num_comp, n_iter=7, random_state=42
     )  # Self.ncomp needs to be specified
     svd.fit(qext_orthogonalized)
-    badspectra = svd.components_[0:num_comp, :]
-    return badspectra
+    return svd.components_
 
 
 def cal_ncomp(
@@ -111,7 +110,6 @@ class ME_EMSC:
         self.tol = tol
         self.precision = precision
         if self.precision is not None:
-            self.precision = precision
             self.tol = np.finfo(float).eps
         self.weights = weights
         if self.weights is None:
