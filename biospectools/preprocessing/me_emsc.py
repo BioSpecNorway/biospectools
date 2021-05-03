@@ -56,32 +56,6 @@ def compress_mie_curves(qext_orthogonalized: np.ndarray, num_comp: int) -> np.nd
     return svd.components_
 
 
-def cal_ncomp(
-    reference: np.ndarray,
-    wavenumbers: np.ndarray,
-    explained_var_lim: float,
-    alpha0: np.ndarray,
-    gamma: np.ndarray,
-) -> int:
-    nprs, nkks = calculate_complex_n(reference, wavenumbers)
-    qext = calculate_qext_curves(nprs, nkks, alpha0, gamma, wavenumbers)
-    qext_orthogonalized = orthogonalize_qext(qext, reference)
-    max_ncomp = reference.shape[0] - 1
-    svd = TruncatedSVD(n_components=min(max_ncomp, 30), n_iter=7, random_state=42)
-    svd.fit(qext_orthogonalized)
-    lda = np.array(
-        [
-            (sing_val ** 2) / (qext_orthogonalized.shape[0] - 1)
-            for sing_val in svd.singular_values_
-        ]
-    )
-
-    explained_var = 100 * lda / np.sum(lda)
-    explained_var = np.cumsum(explained_var)
-    num_comp = np.argmax(explained_var > explained_var_lim) + 1
-    return num_comp
-
-
 class ME_EMSC:
     def __init__(
         self,
@@ -137,14 +111,7 @@ class ME_EMSC:
         )
 
         if self.n_components is None:
-            explained_variance = 99.96
-            self.n_components = cal_ncomp(
-                self.reference,
-                self.wavenumbers,
-                explained_variance,
-                self.alpha0,
-                self.gamma,
-            )
+            self.n_components = self._estimate_n_components()
 
     def transform(self, X: np.ndarray) -> np.ndarray:
         # wavenumber have to be input as sorted
@@ -219,7 +186,7 @@ class ME_EMSC:
             nprs, nkks, self.alpha0, self.gamma, self.wavenumbers)
         qext = orthogonalize_qext(qext, reference)
 
-        badspectra = compress_mie_curves(qext, self.ncomp)
+        badspectra = compress_mie_curves(qext, self.n_components)
 
         emsc = EMSC(reference=reference, poly_order=0, constituents=badspectra)
         new_spectrum = emsc.transform(spectrum[None])[0]
@@ -237,3 +204,24 @@ class ME_EMSC:
             stop_criterion = criterions.TolStopCriterion(
                 self.max_iter, self.tol, 1)
         return stop_criterion
+
+    def _estimate_n_components(self):
+        nprs, nkks = calculate_complex_n(self.reference, self.wavenumbers)
+        qext = calculate_qext_curves(
+            nprs, nkks, self.alpha0, self.gamma, self.wavenumbers)
+        qext_orthogonalized = orthogonalize_qext(qext, self.reference)
+        max_ncomp = len(self.reference) - 1
+        svd = TruncatedSVD(n_components=min(max_ncomp, 30), n_iter=7)
+        svd.fit(qext_orthogonalized)
+        lda = np.array(
+            [
+                (sing_val ** 2) / (qext_orthogonalized.shape[0] - 1)
+                for sing_val in svd.singular_values_
+            ]
+        )
+
+        explained_var = 100 * lda / np.sum(lda)
+        explained_var = np.cumsum(explained_var)
+        explained_var_thresh = 99.96
+        num_comp = np.argmax(explained_var > explained_var_thresh) + 1
+        return num_comp
