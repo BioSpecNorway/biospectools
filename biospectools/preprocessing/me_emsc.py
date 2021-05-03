@@ -89,8 +89,8 @@ class ME_EMSC:
         wavenumbers: np.ndarray = None,
         weights: np.ndarray = None,
         ncomp: int = 0,
-        n0: np.ndarray = np.linspace(1.1, 1.4, 10),
-        a: np.ndarray = np.linspace(2, 7.1, 10),
+        n0: np.ndarray = None,
+        a: np.ndarray = None,
         h: float = 0.25,
         max_iter: int = 30,
         tol: float = 1e-4,
@@ -120,7 +120,11 @@ class ME_EMSC:
         self.max_iter = max_iter
 
         self.n0 = n0
+        if self.n0 is None:
+            self.n0 = np.linspace(1.1, 1.4, 10)
         self.a = a
+        if self.a is None:
+            self.a = np.linspace(2, 7.1, 10)
         self.h = h
 
         self.alpha0 = (4 * np.pi * self.a * (self.n0 - 1)) * 1e-6
