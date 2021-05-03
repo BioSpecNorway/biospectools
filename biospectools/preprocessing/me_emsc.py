@@ -5,6 +5,7 @@ from sklearn.decomposition import TruncatedSVD
 
 from biospectools.physics.misc import calculate_complex_n
 from biospectools.preprocessing import EMSC
+from . import criterions
 
 
 def calculate_qext_curves(
@@ -216,15 +217,15 @@ class ME_EMSC:
             corr_spec = corrected_first_iter[i]
             prev_spec = corr_spec
             prev_coefs = coefs_first_iter[i]
+            prev_res = residual_first_iter[i]
             raw_spec = spectra[i, :]
             raw_spec = raw_spec.reshape(1, -1)
-            rmse_list = [
-                np.sqrt(
-                    (1 / len(residual_first_iter[i, :]))
-                    * np.sum(residual_first_iter[i, :] ** 2)
-                )
-            ]
-            for iter_number in range(2, self.max_iter + 1):
+            rmse = np.sqrt(
+                (1 / len(residual_first_iter[i]))
+                * np.sum(residual_first_iter[i] ** 2))
+            stop_criterion = self._build_stop_cretarion()
+            stop_criterion.add(rmse, [prev_spec, prev_coefs, prev_res])
+            while not stop_criterion:
                 try:
                     new_spec, new_coefs, res = self._iteration_step(
                         raw_spec,
@@ -234,46 +235,19 @@ class ME_EMSC:
                         gamma,
                     )
                 except np.linalg.LinAlgError:
-                    new_spectra[i, :] = np.full(
-                        [raw_spec.shape[1]], np.nan
-                    )
-                    coefs[i] = np.full(self.ncomp + 2, np.nan)
-                    residuals[i, :] = np.full(raw_spec.shape, np.nan)
-                    rmse_all[i] = np.nan
+                    stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
+                    stop_criterion.best_idx = -1
                     break
                 corr_spec = new_spec[0, :]
                 rmse = np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2))
-                rmse_list.append(rmse)
+                stop_criterion.add(rmse, [new_spec, new_coefs, res])
 
-                # Stop criterion
-                if iter_number == self.max_iter:
-                    new_spectra[i, :] = corr_spec
-                    number_of_iterations[i] = iter_number
-                    coefs[i] = new_coefs
-                    residuals[i, :] = res
-                    rmse_all[i] = rmse_list[-1]
-                    break
-                elif iter_number > 2:
-                    if self.precision is None:
-                        pp_rmse, p_rmse, rmse = rmse_list[-3:]
-                    else:
-                        pp_rmse, p_rmse, rmse = [round(r, self.precision)
-                                                 for r in rmse_list[-3:]]
-
-                    if rmse > p_rmse:
-                        new_spectra[i, :] = prev_spec
-                        coefs[i] = prev_coefs
-                        number_of_iterations[i] = iter_number - 1
-                        rmse_all[i] = rmse_list[-2]
-                        break
-                    elif (p_rmse - rmse <= self.tol
-                          and pp_rmse - rmse <= self.tol):
-                        new_spectra[i, :] = corr_spec
-                        number_of_iterations[i] = iter_number
-                        coefs[i] = new_coefs
-                        residuals[i, :] = res
-                        rmse_all[i] = rmse_list[-1]
-                        break
+            best_spec, best_coefs, best_res = stop_criterion.best_value
+            new_spectra[i] = best_spec
+            coefs[i] = best_coefs
+            residuals[i] = best_res
+            rmse_all[i] = stop_criterion.best_score
+            number_of_iterations[i] = stop_criterion.best_iter
 
         if self.verbose:
             print(f"\n ----- Finished correcting {N} spectra ----- \n")
@@ -316,3 +290,13 @@ class ME_EMSC:
         coefs = emsc.coefs_[:, [-1, *range(1, len(badspectra) + 1), 0]]
 
         return new_spectrum, coefs, res
+
+    def _build_stop_cretarion(self):
+        if self.precision is not None:
+            stop_criterion = criterions._MatlabStopCriterion(
+                self.max_iter, self.precision)
+        else:
+            stop_criterion = criterions._TolStopCriterion(
+                self.max_iter, self.tol, 1)
+        return stop_criterion
+
