@@ -181,13 +181,16 @@ class ME_EMSC:
         if self.max_iter == 1:
             number_of_iterations = np.ones([1, new_spectra.shape[0]])
             rmse_all = np.sqrt((res ** 2).sum(axis=-1) / res.shape[1])
-            return new_spectra, coefs, res, rmse_all, number_of_iterations
+        else:
+            new_spectra, coefs, res, rmse_all, number_of_iterations = \
+                self._iterate(X, new_spectra, coefs, res,
+                              basic_emsc, self.alpha0, self.gamma)
+        self.coefs_ = coefs
+        self.residuals_ = res
+        self.rmse_ = rmse_all
+        self.n_iterations_ = number_of_iterations
 
-        # Iterate
-        new_spectra, coefs, residuals, rmse_all, number_of_iterations = self._iterate(
-            X, new_spectra, coefs, res, basic_emsc, self.alpha0, self.gamma
-        )
-        return new_spectra, coefs, residuals, rmse_all, number_of_iterations
+        return new_spectra
 
     def _iterate(
             self,

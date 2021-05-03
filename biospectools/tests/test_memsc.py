@@ -55,7 +55,7 @@ class TestME_EMSC(unittest.TestCase):
         cls.reference = at_wavenumbers(cls.wn_ref, cls.wnS, cls.reference)
         cls.reference = cls.reference[0]
 
-        f = ME_EMSC(
+        cls.f1 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
             ncomp=False,
@@ -64,27 +64,24 @@ class TestME_EMSC(unittest.TestCase):
             precision=4,
             tol=1e-10,
         )
-        cls.f1data, cls.f1params, cls.residuals, cls.RMSE, cls.iterations = \
-            f.transform(cls.Spectra)
+        cls.f1data = cls.f1.transform(cls.Spectra)
 
-        f2 = ME_EMSC(
+        cls.f2 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
             ncomp=14,
             precision=4,
             tol=1e-10,
         )  # With weights
-        cls.f2data, cls.f2params, cls.residuals, cls.RMSE2, cls.iterations2 = \
-            f2.transform(cls.Spectra)
+        cls.f2data = cls.f2.transform(cls.Spectra)
 
-        f3 = ME_EMSC(
+        cls.f3 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
             ncomp=False,
             max_iter=1,
         )
-        cls.f3data, cls.f3params, cls.residuals, cls.RMSE3, cls.iterations3 = \
-            f3.transform(cls.Spectra)
+        cls.f3data = cls.f3.transform(cls.Spectra)
 
     def disabled_test_plotting(self):
         import matplotlib.pyplot as plt
@@ -135,25 +132,28 @@ class TestME_EMSC(unittest.TestCase):
     def test_EMSC_parameters(self):
         print("Test Parameters")
         np.testing.assert_almost_equal(
-            abs(self.f1params[0]),
+            abs(self.f1.coefs_[0]),
             abs(self.param_default_20th_elem),
         )
         np.testing.assert_almost_equal(
-            abs(self.f2params[0]),
+            abs(self.f2.coefs_[0]),
             abs(self.param_14ncomp_20th_elem),
         )
         np.testing.assert_almost_equal(
-            abs(self.f3params[0]),
+            abs(self.f3.coefs_[0]),
             abs(self.param_fixed_iter3_20th_elem),
         )
 
     def test_number_iterations(self):
         print("Test Iters")
-        numiter = np.vstack((self.iterations, self.iterations2, self.iterations3))
+        numiter = np.vstack((
+            self.f1.n_iterations_,
+            self.f2.n_iterations_,
+            self.f3.n_iterations_))
         np.testing.assert_equal(numiter, self.numiter_std)
 
     def test_RMSE(self):
-        RMSE = np.array([self.RMSE, self.RMSE2, self.RMSE3])
+        RMSE = np.array([self.f1.rmse_, self.f2.rmse_, self.f3.rmse_])
         np.testing.assert_equal(np.round(RMSE, decimals=4), self.RMSE_std)
 
     def test_same_data_reference(self):
