@@ -153,42 +153,14 @@ class ME_EMSC:
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
 
-        resonant = True  # Possibility for using the 2008 version
-
-        if resonant:
-            # if this should be any point, we need to terminate after
-            # 1 iteration for the non-resonant one
-            nprs, nkks = calculate_complex_n(ref_x, self.wavenumbers)
-        else:
-            npr = np.zeros(len(self.wavenumbers))
-            nprs = npr / (self.wavenumbers * 100)
-            nkks = np.zeros(len(self.wavenumbers))
-
         # For the first iteration, make basic EMSC model
         basic_emsc = EMSC(
             ref_x, self.wavenumbers,
             validate_state=False, rebuild_model=False)
 
-        # Calculate scattering curves for ME-EMSC
-        qext = calculate_qext_curves(
-            nprs, nkks, self.alpha0, self.gamma, self.wavenumbers
-        )
-        qext = orthogonalize_qext(qext, ref_x)
-        badspectra = compress_mie_curves(qext, self.ncomp)
+        new_spectra, coefs, res, rmse_all, number_of_iterations = \
+            self._iterate(X, ref_x, basic_emsc, self.alpha0, self.gamma)
 
-        emsc = EMSC(reference=ref_x, poly_order=0, constituents=badspectra)
-        new_spectra = emsc.transform(X)
-        # adapt EMSC results to code
-        res = emsc.residuals_
-        coefs = emsc.coefs_[:, [-1, *range(1, len(badspectra) + 1), 0]]
-
-        if self.max_iter == 1:
-            number_of_iterations = np.ones([1, new_spectra.shape[0]])
-            rmse_all = np.sqrt((res ** 2).sum(axis=-1) / res.shape[1])
-        else:
-            new_spectra, coefs, res, rmse_all, number_of_iterations = \
-                self._iterate(X, new_spectra, coefs, res,
-                              basic_emsc, self.alpha0, self.gamma)
         self.coefs_ = coefs
         self.residuals_ = res
         self.rmse_ = rmse_all
@@ -199,19 +171,17 @@ class ME_EMSC:
     def _iterate(
             self,
             spectra: np.ndarray,
-            corrected_first_iter: np.ndarray,
-            coefs_first_iter: np.ndarray,
-            residual_first_iter: np.ndarray,
+            reference: np.ndarray,
             basic_emsc: EMSC,
             alpha0: np.ndarray,
             gamma: np.ndarray,
     ) -> tuple:
-        new_spectra = np.full(corrected_first_iter.shape, np.nan)
+        new_spectra = np.full(spectra.shape, np.nan)
         number_of_iterations = np.full(spectra.shape[0], np.nan)
         coefs = np.full((spectra.shape[0], self.ncomp + 2), np.nan)
         residuals = np.full(spectra.shape, np.nan)
         rmse_all = np.full([spectra.shape[0]], np.nan)
-        N = corrected_first_iter.shape[0]
+        N = spectra.shape[0]
         for i in range(N):
             if self.verbose:
                 print(
@@ -221,17 +191,10 @@ class ME_EMSC:
                     + f"] [{i}/{N}]",
                     end="\r",
                 )
-            corr_spec = corrected_first_iter[i]
-            prev_spec = corr_spec
-            prev_coefs = coefs_first_iter[i]
-            prev_res = residual_first_iter[i]
+            corr_spec = reference
             raw_spec = spectra[i, :]
             raw_spec = raw_spec.reshape(1, -1)
-            rmse = np.sqrt(
-                (1 / len(residual_first_iter[i]))
-                * np.sum(residual_first_iter[i] ** 2))
             stop_criterion = self._build_stop_cretarion()
-            stop_criterion.add(rmse, [prev_spec, prev_coefs, prev_res])
             while not stop_criterion:
                 try:
                     new_spec, new_coefs, res = self._iteration_step(
