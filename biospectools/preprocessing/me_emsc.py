@@ -161,7 +161,7 @@ class ME_EMSC:
             validate_state=False, rebuild_model=False)
 
         new_spectra, coefs, res, rmse_all, number_of_iterations = \
-            self._iterate(X, ref_x, basic_emsc, self.alpha0, self.gamma)
+            self._iterate(X, ref_x, basic_emsc)
 
         self.coefs_ = coefs
         self.residuals_ = res
@@ -175,8 +175,6 @@ class ME_EMSC:
             spectra: np.ndarray,
             reference: np.ndarray,
             basic_emsc: EMSC,
-            alpha0: np.ndarray,
-            gamma: np.ndarray,
     ) -> tuple:
         new_spectra = np.full(spectra.shape, np.nan)
         number_of_iterations = np.full(spectra.shape[0], np.nan)
@@ -203,8 +201,6 @@ class ME_EMSC:
                         raw_spec,
                         corr_spec,
                         basic_emsc,
-                        alpha0,
-                        gamma,
                     )
                 except np.linalg.LinAlgError:
                     stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
@@ -230,8 +226,6 @@ class ME_EMSC:
             spectrum: np.ndarray,
             reference: np.ndarray,
             basic_emsc: EMSC,
-            alpha0: np.ndarray,
-            gamma: np.ndarray,
     ) -> tuple:
         # scale with basic EMSC:
         reference = basic_emsc.transform(reference[None])[0]
@@ -257,7 +251,8 @@ class ME_EMSC:
             npr = np.zeros(len(self.wavenumbers))
             nprs = npr / (self.wavenumbers * 100)
             nkks = np.zeros(len(self.wavenumbers))
-        qext = calculate_qext_curves(nprs, nkks, alpha0, gamma, self.wavenumbers)
+        qext = calculate_qext_curves(
+            nprs, nkks, self.alpha0, self.gamma, self.wavenumbers)
         qext = orthogonalize_qext(qext, reference)
 
         badspectra = compress_mie_curves(qext, self.ncomp)
