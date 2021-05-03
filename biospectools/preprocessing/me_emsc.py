@@ -97,6 +97,7 @@ class ME_EMSC:
         precision: Optional[int] = None,
         verbose: bool = False,
         positive_ref: bool = True,
+        resonant: bool = True
     ):
 
         if reference is None:
@@ -117,6 +118,7 @@ class ME_EMSC:
             self.weights = np.ones(len(self.reference))
         self.ncomp = ncomp
         self.verbose = verbose
+        self.resonant = resonant
         self.max_iter = max_iter
 
         self.n0 = n0
@@ -247,7 +249,14 @@ class ME_EMSC:
             reference = nonzero_reference
 
         # calculate Qext-curves
-        nprs, nkks = calculate_complex_n(nonzero_reference, self.wavenumbers)
+        if self.resonant:
+            # if this should be any point, we need to terminate after
+            # 1 iteration for the non-resonant one
+            nprs, nkks = calculate_complex_n(nonzero_reference, self.wavenumbers)
+        else:
+            npr = np.zeros(len(self.wavenumbers))
+            nprs = npr / (self.wavenumbers * 100)
+            nkks = np.zeros(len(self.wavenumbers))
         qext = calculate_qext_curves(nprs, nkks, alpha0, gamma, self.wavenumbers)
         qext = orthogonalize_qext(qext, reference)
 
