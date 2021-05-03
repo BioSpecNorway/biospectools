@@ -205,18 +205,14 @@ class ME_EMSC:
         # Apply weights
         reference = reference * self.weights
 
-        # set negative parts to zero
-        nonzero_reference = reference.copy()
-        nonzero_reference[nonzero_reference < 0] = 0
-
         if self.positive_ref:
-            reference = nonzero_reference
+            reference[reference < 0] = 0
 
         # calculate Qext-curves
         if self.resonant:
             # if this should be any point, we need to terminate after
             # 1 iteration for the non-resonant one
-            nprs, nkks = calculate_complex_n(nonzero_reference, self.wavenumbers)
+            nprs, nkks = calculate_complex_n(reference, self.wavenumbers)
         else:
             npr = np.zeros(len(self.wavenumbers))
             nprs = npr / (self.wavenumbers * 100)
