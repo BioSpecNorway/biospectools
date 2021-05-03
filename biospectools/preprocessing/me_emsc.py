@@ -88,7 +88,7 @@ class ME_EMSC:
         reference: np.ndarray = None,
         wavenumbers: np.ndarray = None,
         weights: np.ndarray = None,
-        ncomp: int = 0,
+        n_components: Optional[int] = None,
         n0: np.ndarray = None,
         a: np.ndarray = None,
         h: float = 0.25,
@@ -116,7 +116,7 @@ class ME_EMSC:
         self.weights = weights
         if self.weights is None:
             self.weights = np.ones(len(self.reference))
-        self.ncomp = ncomp
+        self.n_components = n_components
         self.verbose = verbose
         self.resonant = resonant
         self.max_iter = max_iter
@@ -136,17 +136,15 @@ class ME_EMSC:
             / (4 * np.pi * 0.5 * np.pi * (self.n0 - 1) * self.a * 1e-6)
         )
 
-        explained_variance = 99.96
-        if self.ncomp == 0:
-            self.ncomp = cal_ncomp(
+        if self.n_components is None:
+            explained_variance = 99.96
+            self.n_components = cal_ncomp(
                 self.reference,
                 self.wavenumbers,
                 explained_variance,
                 self.alpha0,
                 self.gamma,
             )
-        else:
-            self.explained_variance = False
 
     def transform(self, X: np.ndarray) -> np.ndarray:
         # wavenumber have to be input as sorted

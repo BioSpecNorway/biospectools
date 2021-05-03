@@ -58,7 +58,6 @@ class TestME_EMSC(unittest.TestCase):
         cls.f1 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
-            ncomp=False,
             weights=None,
             max_iter=45,
             precision=4,
@@ -69,7 +68,7 @@ class TestME_EMSC(unittest.TestCase):
         cls.f2 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
-            ncomp=14,
+            n_components=14,
             precision=4,
             tol=1e-10,
         )  # With weights
@@ -78,7 +77,6 @@ class TestME_EMSC(unittest.TestCase):
         cls.f3 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
-            ncomp=False,
             max_iter=1,
         )
         cls.f3data = cls.f3.transform(cls.Spectra)
