@@ -148,7 +148,7 @@ class ME_EMSC:
         else:
             self.explained_variance = False
 
-    def transform(self, X: np.ndarray) -> tuple:
+    def transform(self, X: np.ndarray) -> np.ndarray:
         # wavenumber have to be input as sorted
         # compute average spectrum from the reference
         ref_x = self.reference * self.weights
@@ -160,66 +160,36 @@ class ME_EMSC:
             ref_x, self.wavenumbers,
             validate_state=False, rebuild_model=False)
 
-        new_spectra, coefs, res, rmse_all, number_of_iterations = \
-            self._iterate(X, ref_x, basic_emsc)
-
-        self.coefs_ = coefs
-        self.residuals_ = res
-        self.rmse_ = rmse_all
-        self.n_iterations_ = number_of_iterations
-
-        return new_spectra
-
-    def _iterate(
-            self,
-            spectra: np.ndarray,
-            reference: np.ndarray,
-            basic_emsc: EMSC,
-    ) -> tuple:
-        new_spectra = np.full(spectra.shape, np.nan)
-        number_of_iterations = np.full(spectra.shape[0], np.nan)
-        coefs = np.full((spectra.shape[0], self.ncomp + 2), np.nan)
-        residuals = np.full(spectra.shape, np.nan)
-        rmse_all = np.full([spectra.shape[0]], np.nan)
-        N = spectra.shape[0]
-        for i in range(N):
-            if self.verbose:
-                print(
-                    "Corrected spectra ["
-                    + int((i / N) * 20) * "#"
-                    + int(((N - i - 1) / N) * 20) * " "
-                    + f"] [{i}/{N}]",
-                    end="\r",
-                )
-            corr_spec = reference
-            raw_spec = spectra[i, :]
-            raw_spec = raw_spec.reshape(1, -1)
+        new_spectra = []
+        self.coefs_ = []
+        self.residuals_ = []
+        self.rmse_ = []
+        self.n_iterations_ = []
+        for spectrum in X:
+            pure_guess = ref_x
             stop_criterion = self._build_stop_cretarion()
             while not stop_criterion:
                 try:
-                    new_spec, new_coefs, res = self._iteration_step(
-                        raw_spec,
-                        corr_spec,
-                        basic_emsc,
-                    )
+                    pure_guess, coefs, res = self._iteration_step(
+                        spectrum, pure_guess, basic_emsc)
+                    rmse = np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2))
+                    stop_criterion.add(rmse, [pure_guess, coefs, res])
                 except np.linalg.LinAlgError:
                     stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
                     stop_criterion.best_idx = -1
                     break
-                corr_spec = new_spec[0, :]
-                rmse = np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2))
-                stop_criterion.add(rmse, [new_spec, new_coefs, res])
+            new_spectra.append(stop_criterion.best_value[0])
+            self.coefs_.append(stop_criterion.best_value[1])
+            self.residuals_.append(stop_criterion.best_value[2])
+            self.rmse_.append(stop_criterion.best_score)
+            self.n_iterations_.append(stop_criterion.best_iter)
 
-            best_spec, best_coefs, best_res = stop_criterion.best_value
-            new_spectra[i] = best_spec
-            coefs[i] = best_coefs
-            residuals[i] = best_res
-            rmse_all[i] = stop_criterion.best_score
-            number_of_iterations[i] = stop_criterion.best_iter
+        self.coefs_ = np.stack(self.coefs_)
+        self.residuals_ = np.stack(self.residuals_)
+        self.rmse_ = np.stack(self.rmse_)
+        self.n_iterations_ = np.stack(self.n_iterations_)
 
-        if self.verbose:
-            print(f"\n ----- Finished correcting {N} spectra ----- \n")
-        return new_spectra, coefs, residuals, rmse_all, number_of_iterations
+        return np.stack(new_spectra)
 
     def _iteration_step(
             self,
@@ -258,10 +228,10 @@ class ME_EMSC:
         badspectra = compress_mie_curves(qext, self.ncomp)
 
         emsc = EMSC(reference=reference, poly_order=0, constituents=badspectra)
-        new_spectrum = emsc.transform(spectrum)
+        new_spectrum = emsc.transform(spectrum[None])[0]
         # adapt EMSC results to code
         res = emsc.residuals_
-        coefs = emsc.coefs_[:, [-1, *range(1, len(badspectra) + 1), 0]]
+        coefs = emsc.coefs_[0, [-1, *range(1, len(badspectra) + 1), 0]]
 
         return new_spectrum, coefs, res
 
@@ -273,4 +243,3 @@ class ME_EMSC:
             stop_criterion = criterions.TolStopCriterion(
                 self.max_iter, self.tol, 1)
         return stop_criterion
-
