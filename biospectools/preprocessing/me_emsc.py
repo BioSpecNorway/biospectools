@@ -291,12 +291,12 @@ class ME_EMSC:
 
         return new_spectrum, coefs, res
 
-    def _build_stop_cretarion(self):
+    def _build_stop_cretarion(self) -> criterions.BaseStopCriterion:
         if self.precision is not None:
-            stop_criterion = criterions._MatlabStopCriterion(
+            stop_criterion = criterions.MatlabStopCriterion(
                 self.max_iter, self.precision)
         else:
-            stop_criterion = criterions._TolStopCriterion(
+            stop_criterion = criterions.TolStopCriterion(
                 self.max_iter, self.tol, 1)
         return stop_criterion
 

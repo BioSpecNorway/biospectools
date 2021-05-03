@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class _BaseStopCriterion:
+class BaseStopCriterion:
     def __init__(self, max_iter):
         self.max_iter = max_iter
 
@@ -45,7 +45,7 @@ class _BaseStopCriterion:
         return False
 
 
-class _MatlabStopCriterion(_BaseStopCriterion):
+class MatlabStopCriterion(BaseStopCriterion):
     def __init__(self, max_iter, precision=None):
         super().__init__(max_iter)
         self.precision = precision
@@ -61,7 +61,7 @@ class _MatlabStopCriterion(_BaseStopCriterion):
         return rmse > p_rmse or pp_rmse - rmse <= self._eps
 
 
-class _TolStopCriterion(_BaseStopCriterion):
+class TolStopCriterion(BaseStopCriterion):
     def __init__(self, max_iter, tol, patience):
         super().__init__(max_iter)
         self.tol = tol
