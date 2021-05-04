@@ -90,7 +90,7 @@ def compress_mie_curves(qext_orthogonalized: np.ndarray, num_comp: int) -> np.nd
     return svd.components_
 
 
-class ME_EMSC:
+class MeEMSC:
     def __init__(
         self,
         reference: np.ndarray = None,
