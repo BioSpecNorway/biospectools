@@ -2,6 +2,8 @@ import unittest
 import numpy as np
 from biospectools.preprocessing.me_emsc import ME_EMSC
 from biospectools.utils import at_wavenumbers
+from biospectools.preprocessing.criterions import \
+    MatlabStopCriterion, TolStopCriterion
 
 
 class TestME_EMSC(unittest.TestCase):
@@ -55,29 +57,28 @@ class TestME_EMSC(unittest.TestCase):
         cls.reference = at_wavenumbers(cls.wn_ref, cls.wnS, cls.reference)
         cls.reference = cls.reference[0]
 
+        stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
         cls.f1 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
             weights=None,
-            max_iter=45,
-            precision=4,
-            tol=1e-10,
+            stop_criterion=stop_criterion
         )
         cls.f1data = cls.f1.transform(cls.Spectra)
 
+        stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
         cls.f2 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
             n_components=14,
-            precision=4,
-            tol=1e-10,
+            stop_criterion=stop_criterion
         )  # With weights
         cls.f2data = cls.f2.transform(cls.Spectra)
 
         cls.f3 = ME_EMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
-            max_iter=1,
+            max_iter=1
         )
         cls.f3data = cls.f3.transform(cls.Spectra)
 

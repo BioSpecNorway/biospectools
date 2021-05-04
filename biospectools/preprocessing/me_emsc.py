@@ -5,7 +5,8 @@ from sklearn.decomposition import TruncatedSVD
 
 from biospectools.physics.misc import calculate_complex_n
 from biospectools.preprocessing import EMSC
-from . import criterions
+from biospectools.preprocessing.criterions import \
+    BaseStopCriterion, TolStopCriterion
 
 
 def calculate_qext_curves(
@@ -68,7 +69,8 @@ class ME_EMSC:
         h: float = 0.25,
         max_iter: int = 30,
         tol: float = 1e-4,
-        precision: Optional[int] = None,
+        patience: int = 1,
+        stop_criterion: Optional[BaseStopCriterion] = None,
         verbose: bool = False,
         positive_ref: bool = True,
         resonant: bool = True
@@ -83,17 +85,15 @@ class ME_EMSC:
         self.reference = reference
         self.wavenumbers = wavenumbers
         self.positive_ref = positive_ref
-        self.tol = tol
-        self.precision = precision
-        if self.precision is not None:
-            self.tol = np.finfo(float).eps
+        self.stop_criterion = stop_criterion
+        if self.stop_criterion is None:
+            self.stop_criterion = TolStopCriterion(max_iter, tol, patience)
         self.weights = weights
         if self.weights is None:
             self.weights = np.ones(len(self.reference))
         self.n_components = n_components
         self.verbose = verbose
         self.resonant = resonant
-        self.max_iter = max_iter
 
         self.n0 = n0
         if self.n0 is None:
@@ -132,22 +132,22 @@ class ME_EMSC:
         self.n_iterations_ = []
         for spectrum in X:
             pure_guess = ref_x
-            stop_criterion = self._build_stop_cretarion()
-            while not stop_criterion:
+            self.stop_criterion.reset()
+            while not self.stop_criterion:
                 try:
                     pure_guess, coefs, res = self._iteration_step(
                         spectrum, pure_guess, basic_emsc)
                     rmse = np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2))
-                    stop_criterion.add(rmse, [pure_guess, coefs, res])
+                    self.stop_criterion.add(rmse, [pure_guess, coefs, res])
                 except np.linalg.LinAlgError:
-                    stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
-                    stop_criterion.best_idx = -1
+                    self.stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
+                    self.stop_criterion.best_idx = -1
                     break
-            new_spectra.append(stop_criterion.best_value[0])
-            self.coefs_.append(stop_criterion.best_value[1])
-            self.residuals_.append(stop_criterion.best_value[2])
-            self.rmse_.append(stop_criterion.best_score)
-            self.n_iterations_.append(stop_criterion.best_iter)
+            new_spectra.append(self.stop_criterion.best_value[0])
+            self.coefs_.append(self.stop_criterion.best_value[1])
+            self.residuals_.append(self.stop_criterion.best_value[2])
+            self.rmse_.append(self.stop_criterion.best_score)
+            self.n_iterations_.append(self.stop_criterion.best_iter)
 
         self.coefs_ = np.stack(self.coefs_)
         self.residuals_ = np.stack(self.residuals_)
@@ -195,15 +195,6 @@ class ME_EMSC:
         coefs = emsc.coefs_[0, [-1, *range(1, len(badspectra) + 1), 0]]
 
         return new_spectrum, coefs, res
-
-    def _build_stop_cretarion(self) -> criterions.BaseStopCriterion:
-        if self.precision is not None:
-            stop_criterion = criterions.MatlabStopCriterion(
-                self.max_iter, self.precision)
-        else:
-            stop_criterion = criterions.TolStopCriterion(
-                self.max_iter, self.tol, 1)
-        return stop_criterion
 
     def _estimate_n_components(self):
         nprs, nkks = calculate_complex_n(self.reference, self.wavenumbers)
