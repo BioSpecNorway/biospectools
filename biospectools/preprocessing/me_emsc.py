@@ -193,7 +193,6 @@ class MeEMSC:
     def _generate_mie_curves_and_fit_svd(self, reference, n_components):
         qext = self.mie_generator.generate(reference, self.wavenumbers)
         qext_orthogonal = orthogonalize_qext(qext, reference)
-        self._n_generated = len(qext)
 
         svd = TruncatedSVD(n_components, n_iter=7)
         svd.fit(qext_orthogonal)
@@ -202,15 +201,9 @@ class MeEMSC:
     def _estimate_n_components(self):
         svd = self._generate_mie_curves_and_fit_svd(
             self.reference, n_components=min(30, len(self.reference) - 1))
-        lda = np.array(
-            [
-                (sing_val ** 2) / (self._n_generated - 1)
-                for sing_val in svd.singular_values_
-            ]
-        )
+        lda = svd.singular_values_ ** 2
 
-        explained_var = 100 * lda / np.sum(lda)
-        explained_var = np.cumsum(explained_var)
-        explained_var_thresh = 99.96
-        num_comp = np.argmax(explained_var > explained_var_thresh) + 1
+        explained_var = np.cumsum(lda / np.sum(lda)) * 100
+        variance_thresh = 99.96
+        num_comp = np.argmax(explained_var > variance_thresh) + 1
         return num_comp
