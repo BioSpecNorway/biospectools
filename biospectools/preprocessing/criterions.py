@@ -4,7 +4,9 @@ import numpy as np
 class BaseStopCriterion:
     def __init__(self, max_iter):
         self.max_iter = max_iter
+        self.reset()
 
+    def reset(self):
         self.best_idx = 0
         self.scores = []
         self.values = []
