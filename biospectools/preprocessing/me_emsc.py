@@ -116,7 +116,7 @@ class ME_EMSC:
     def transform(self, X: np.ndarray) -> np.ndarray:
         # wavenumber have to be input as sorted
         # compute average spectrum from the reference
-        ref_x = self.reference * self.weights
+        ref_x = self.reference
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
 
