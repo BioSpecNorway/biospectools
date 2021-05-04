@@ -201,8 +201,10 @@ class MeEMSC:
     def _estimate_n_components(self):
         svd = self._generate_mie_curves_and_fit_svd(
             self.reference, n_components=min(30, len(self.reference) - 1))
-        lda = svd.singular_values_ ** 2
 
+        # svd.explained_variance_ is not used since
+        # it is not consistent with matlab code
+        lda = svd.singular_values_ ** 2
         explained_var = np.cumsum(lda / np.sum(lda)) * 100
         variance_thresh = 99.96
         num_comp = np.argmax(explained_var > variance_thresh) + 1
