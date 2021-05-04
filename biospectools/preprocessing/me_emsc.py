@@ -82,14 +82,6 @@ def orthogonalize_qext(qext: np.ndarray, reference: np.ndarray):
     return qext_orthogonalized
 
 
-def compress_mie_curves(qext_orthogonalized: np.ndarray, num_comp: int) -> np.ndarray:
-    svd = TruncatedSVD(
-        n_components=num_comp, n_iter=7, random_state=42
-    )  # Self.ncomp needs to be specified
-    svd.fit(qext_orthogonalized)
-    return svd.components_
-
-
 class MeEMSC:
     def __init__(
         self,
@@ -192,28 +184,33 @@ class MeEMSC:
             reference[reference < 0] = 0
 
         # calculate Qext-curves
-        qext = self.mie_generator.generate(reference, self.wavenumbers)
-        qext = orthogonalize_qext(qext, reference)
+        svd = self._generate_mie_curves_and_fit_svd(
+            reference, self.n_components)
 
-        badspectra = compress_mie_curves(qext, self.n_components)
-
-        emsc = EMSC(reference=reference, poly_order=0, constituents=badspectra)
+        emsc = EMSC(
+            reference=reference, poly_order=0, constituents=svd.components_)
         new_spectrum = emsc.transform(spectrum[None])[0]
         # adapt EMSC results to code
         res = emsc.residuals_
-        coefs = emsc.coefs_[0, [-1, *range(1, len(badspectra) + 1), 0]]
+        coefs = emsc.coefs_[0, [-1, *range(1, self.n_components + 1), 0]]
 
         return new_spectrum, coefs, res
 
+    def _generate_mie_curves_and_fit_svd(self, reference, n_components):
+        qext = self.mie_generator.generate(reference, self.wavenumbers)
+        qext_orthogonal = orthogonalize_qext(qext, reference)
+        self._n_generated = len(qext)
+
+        svd = TruncatedSVD(n_components, n_iter=7)
+        svd.fit(qext_orthogonal)
+        return svd
+
     def _estimate_n_components(self):
-        qext = self.mie_generator.generate(self.reference, self.wavenumbers)
-        qext_orthogonalized = orthogonalize_qext(qext, self.reference)
-        max_ncomp = len(self.reference) - 1
-        svd = TruncatedSVD(n_components=min(max_ncomp, 30), n_iter=7)
-        svd.fit(qext_orthogonalized)
+        svd = self._generate_mie_curves_and_fit_svd(
+            self.reference, n_components=min(30, len(self.reference) - 1))
         lda = np.array(
             [
-                (sing_val ** 2) / (qext_orthogonalized.shape[0] - 1)
+                (sing_val ** 2) / (self._n_generated - 1)
                 for sing_val in svd.singular_values_
             ]
         )
