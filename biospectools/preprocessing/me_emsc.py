@@ -2,42 +2,75 @@ from typing import Optional
 
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
+from scipy.signal import hilbert
+from scipy.interpolate import interp1d
+import numexpr as ne
 
-from biospectools.physics.misc import calculate_complex_n
 from biospectools.preprocessing import EMSC
 from biospectools.preprocessing.criterions import \
     BaseStopCriterion, TolStopCriterion
 
 
-def calculate_qext_curves(
-    nprs: np.ndarray,
-    nkks: np.ndarray,
-    alpha0: np.ndarray,
-    gamma: np.ndarray,
-    wavenumbers: np.ndarray,
-) -> np.ndarray:
-    gamma_nkks = (1 + np.multiply.outer(gamma, nkks)) * (wavenumbers * 100)
-    tanbeta = nprs / np.add.outer((1 / gamma.T), nkks)
+class MatlabMieCurvesGenerator:
+    def __init__(self, n0s=None, rs=None, h=0.25):
+        self.rs = rs
+        if self.rs is None:
+            self.rs = np.linspace(2, 7.1, 10)
+        self.rs = self.rs * 1e-6
 
-    beta0 = np.arctan(tanbeta)
-    cosB = np.cos(beta0)
-    cos2B = np.cos(2.0 * beta0)
+        self.n0s = n0s
+        if self.n0s is None:
+            self.n0s = np.linspace(1.1, 1.4, 10)
 
-    n_alpha = len(alpha0)
-    n_gamma = len(gamma)
+        self.h = h
 
-    q_matrix = np.zeros((n_alpha * n_gamma, len(wavenumbers)))
+        self.alpha0s = 4 * np.pi * self.rs * (self.n0s - 1)
 
-    for i in range(n_alpha):
-        rho = alpha0[i] * gamma_nkks
-        rhocosB = cosB / rho
-        q = 2.0 + (4 * rhocosB) * (
-            -np.exp(-(rho) * (tanbeta))
-            * (np.sin((rho) - (beta0)) + np.cos((rho - 2 * beta0)) * rhocosB)
-            + cos2B * rhocosB
-        )
-        q_matrix[i * n_alpha : (i + 1) * n_alpha, :] = q
-    return q_matrix
+        optical_depths = 0.5 * np.pi * self.rs
+        fs = self.h * np.log(10) / (4 * np.pi * optical_depths)
+        self.gammas = fs / (self.n0s - 1)
+
+        # prepare for broadcasting (alpha, gamma, wns)
+        self.alpha0s = self.alpha0s[:, None, None]
+        self.gammas = self.gammas[None, :, None]
+
+    def generate(self, pure_absorbance, wavenumbers):
+        wavenumbers = wavenumbers * 100
+        nprs, nkks = self._get_refractive_index(pure_absorbance, wavenumbers)
+        qexts = self._calculate_qext_curves(nprs, nkks, wavenumbers)
+        return qexts
+
+    def _calculate_qext_curves(self, nprs, nkks, wavenumbers):
+        rho = self.alpha0s * (1 + self.gammas*nkks) * wavenumbers
+
+        tanbeta = nprs / (1 / self.gammas + nkks)
+
+        beta = np.arctan(tanbeta)
+        qexts = ne.evaluate(
+            '2 - 4 * exp(-rho * tanbeta) * cos(beta) / rho * sin(rho - beta)'
+            '- 4 * exp(-rho * tanbeta) * (cos(beta) / rho) ** 2 * cos(rho - 2 * beta)' 
+            '+ 4 * (cos(beta) / rho) ** 2 * cos(2 * beta)')
+        return qexts.reshape(-1, len(wavenumbers))
+
+    def _get_refractive_index(self, pure_absorbance, wavenumbers):
+        pad_size = 200
+        # Extend absorbance spectrum
+        wns_ext = self._extrapolate_wns(wavenumbers, pad_size)
+        pure_ext = np.pad(pure_absorbance, pad_size, mode='edge')
+        nprs_ext = pure_ext / wns_ext
+
+        # Calculate Hilbert transform
+        nkks_ext = -hilbert(nprs_ext).imag
+
+        nkks = nkks_ext[pad_size:-pad_size]
+        nprs = nprs_ext[pad_size:-pad_size]
+        return nprs, nkks
+
+    def _extrapolate_wns(self, wns, pad_size):
+        f = interp1d(np.arange(len(wns)), wns, fill_value='extrapolate')
+        idxs_ext = np.arange(-pad_size, len(wns) + pad_size)
+        wns_ext = f(idxs_ext)
+        return wns_ext
 
 
 def orthogonalize_qext(qext: np.ndarray, reference: np.ndarray):
@@ -93,20 +126,7 @@ class ME_EMSC:
         self.n_components = n_components
         self.verbose = verbose
 
-        self.n0 = n0
-        if self.n0 is None:
-            self.n0 = np.linspace(1.1, 1.4, 10)
-        self.a = a
-        if self.a is None:
-            self.a = np.linspace(2, 7.1, 10)
-        self.h = h
-
-        self.alpha0 = (4 * np.pi * self.a * (self.n0 - 1)) * 1e-6
-        self.gamma = (
-            self.h
-            * np.log(10)
-            / (4 * np.pi * 0.5 * np.pi * (self.n0 - 1) * self.a * 1e-6)
-        )
+        self.mie_generator = MatlabMieCurvesGenerator(n0, a, h)
 
         if self.n_components is None:
             self.n_components = self._estimate_n_components()
@@ -171,9 +191,8 @@ class ME_EMSC:
         if self.positive_ref:
             reference[reference < 0] = 0
 
-        nprs, nkks = calculate_complex_n(reference, self.wavenumbers)
-        qext = calculate_qext_curves(
-            nprs, nkks, self.alpha0, self.gamma, self.wavenumbers)
+        # calculate Qext-curves
+        qext = self.mie_generator.generate(reference, self.wavenumbers)
         qext = orthogonalize_qext(qext, reference)
 
         badspectra = compress_mie_curves(qext, self.n_components)
@@ -187,9 +206,7 @@ class ME_EMSC:
         return new_spectrum, coefs, res
 
     def _estimate_n_components(self):
-        nprs, nkks = calculate_complex_n(self.reference, self.wavenumbers)
-        qext = calculate_qext_curves(
-            nprs, nkks, self.alpha0, self.gamma, self.wavenumbers)
+        qext = self.mie_generator.generate(self.reference, self.wavenumbers)
         qext_orthogonalized = orthogonalize_qext(qext, self.reference)
         max_ncomp = len(self.reference) - 1
         svd = TruncatedSVD(n_components=min(max_ncomp, 30), n_iter=7)
