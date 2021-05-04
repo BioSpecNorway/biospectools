@@ -11,6 +11,126 @@ from biospectools.preprocessing.criterions import \
     BaseStopCriterion, TolStopCriterion
 
 
+class MeEMSC:
+    def __init__(
+            self,
+            reference: np.ndarray,
+            wavenumbers: np.ndarray,
+            weights: np.ndarray = None,
+            n_components: Optional[int] = None,
+            n0: np.ndarray = None,
+            a: np.ndarray = None,
+            h: float = 0.25,
+            max_iter: int = 30,
+            tol: float = 1e-4,
+            patience: int = 1,
+            stop_criterion: Optional[BaseStopCriterion] = None,
+            positive_ref: bool = True,
+            verbose: bool = False):
+        self.reference = reference
+        self.wavenumbers = wavenumbers
+        if self.wavenumbers[0] > self.wavenumbers[1]:
+            raise ValueError("wavenumbers must be ascending")
+
+        self.weights = weights if weights is not None else 1
+
+        self.mie_generator = MatlabMieCurvesGenerator(n0, a, h)
+        self.n_components = n_components
+        if self.n_components is None:
+            self.n_components = self._estimate_n_components()
+
+        self.stop_criterion = stop_criterion
+        if self.stop_criterion is None:
+            self.stop_criterion = TolStopCriterion(max_iter, tol, patience)
+
+        self.positive_ref = positive_ref
+        self.verbose = verbose
+
+    def transform(self, spectra: np.ndarray) -> np.ndarray:
+        # wavenumber have to be input as sorted
+        # compute average spectrum from the reference
+        ref_x = self.reference
+        if self.positive_ref:
+            ref_x[ref_x < 0] = 0
+
+        # For the first iteration, make basic EMSC model
+        basic_emsc = EMSC(
+            ref_x, self.wavenumbers,
+            validate_state=False, rebuild_model=False)
+
+        new_spectra = []
+        self.coefs_ = []
+        self.residuals_ = []
+        self.rmse_ = []
+        self.n_iterations_ = []
+        for spectrum in spectra:
+            pure_guess = ref_x
+            self.stop_criterion.reset()
+            while not self.stop_criterion:
+                try:
+                    pure_guess, coefs, res = self._iteration_step(
+                        spectrum, pure_guess, basic_emsc)
+                    rmse = np.sqrt(np.sum(res ** 2) / len(res))
+                    self.stop_criterion.add(rmse, [pure_guess, coefs, res])
+                except np.linalg.LinAlgError:
+                    self.stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
+                    self.stop_criterion.best_idx = -1
+                    break
+            new_spectra.append(self.stop_criterion.best_value[0])
+            self.coefs_.append(self.stop_criterion.best_value[1])
+            self.residuals_.append(self.stop_criterion.best_value[2])
+            self.rmse_.append(self.stop_criterion.best_score)
+            self.n_iterations_.append(self.stop_criterion.best_iter)
+
+        self.coefs_ = np.stack(self.coefs_)
+        self.residuals_ = np.stack(self.residuals_)
+        self.rmse_ = np.stack(self.rmse_)
+        self.n_iterations_ = np.stack(self.n_iterations_)
+
+        return np.stack(new_spectra)
+
+    def _iteration_step(self, spectrum, reference, basic_emsc: EMSC) -> tuple:
+        # scale with basic EMSC:
+        reference = basic_emsc.transform(reference[None])[0]
+        if np.all(np.isnan(reference)):
+            raise np.linalg.LinAlgError()
+
+        reference = reference * self.weights
+        if self.positive_ref:
+            reference[reference < 0] = 0
+
+        svd = self._generate_mie_curves_and_fit_svd(
+            reference, self.n_components)
+        emsc = EMSC(
+            reference=reference, poly_order=0, constituents=svd.components_)
+        new_spectrum = emsc.transform(spectrum[None])[0]
+        # adapt EMSC results to code
+        res = emsc.residuals_[0]
+        coefs = emsc.coefs_[0, [-1, *range(1, self.n_components + 1), 0]]
+
+        return new_spectrum, coefs, res
+
+    def _generate_mie_curves_and_fit_svd(self, reference, n_components):
+        qext = self.mie_generator.generate(reference, self.wavenumbers)
+        qext_orthogonal = orthogonalize_qext(qext, reference)
+
+        svd = TruncatedSVD(n_components, n_iter=7)
+        svd.fit(qext_orthogonal)
+        return svd
+
+    def _estimate_n_components(self):
+        svd = self._generate_mie_curves_and_fit_svd(
+            self.reference, n_components=min(30, len(self.reference) - 1))
+
+        # svd.explained_variance_ is not used since
+        # it is not consistent with matlab code
+        lda = svd.singular_values_ ** 2
+        explained_var = np.cumsum(lda / np.sum(lda)) * 100
+        variance_thresh = 99.96
+        num_comp = np.argmax(explained_var > variance_thresh) + 1
+        return num_comp
+
+
 class MatlabMieCurvesGenerator:
     def __init__(self, n0s=None, rs=None, h=0.25):
         self.rs = rs if rs is not None else np.linspace(2, 7.1, 10)
@@ -36,13 +156,11 @@ class MatlabMieCurvesGenerator:
 
     def _calculate_qext_curves(self, nprs, nkks, wavenumbers):
         rho = self.alpha0s * (1 + self.gammas*nkks) * wavenumbers
-
         tanbeta = nprs / (1 / self.gammas + nkks)
-
         beta = np.arctan(tanbeta)
         qexts = ne.evaluate(
             '2 - 4 * exp(-rho * tanbeta) * cos(beta) / rho * sin(rho - beta)'
-            '- 4 * exp(-rho * tanbeta) * (cos(beta) / rho) ** 2 * cos(rho - 2 * beta)' 
+            '- 4 * exp(-rho * tanbeta) * (cos(beta) / rho) ** 2 * cos(rho - 2 * beta)'
             '+ 4 * (cos(beta) / rho) ** 2 * cos(2 * beta)')
         return qexts.reshape(-1, len(wavenumbers))
 
@@ -51,13 +169,13 @@ class MatlabMieCurvesGenerator:
         # Extend absorbance spectrum
         wns_ext = self._extrapolate_wns(wavenumbers, pad_size)
         pure_ext = np.pad(pure_absorbance, pad_size, mode='edge')
-        nprs_ext = pure_ext / wns_ext
 
-        # Calculate Hilbert transform
+        # Calculate refractive index
+        nprs_ext = pure_ext / wns_ext
         nkks_ext = -hilbert(nprs_ext).imag
 
-        nkks = nkks_ext[pad_size:-pad_size]
         nprs = nprs_ext[pad_size:-pad_size]
+        nkks = nkks_ext[pad_size:-pad_size]
         return nprs, nkks
 
     def _extrapolate_wns(self, wns, pad_size):
@@ -72,138 +190,3 @@ def orthogonalize_qext(qext: np.ndarray, reference: np.ndarray):
     s = np.dot(qext, rnorm)[:, None]
     qext_orthogonalized = qext - s * rnorm
     return qext_orthogonalized
-
-
-class MeEMSC:
-    def __init__(
-        self,
-        reference: np.ndarray = None,
-        wavenumbers: np.ndarray = None,
-        weights: np.ndarray = None,
-        n_components: Optional[int] = None,
-        n0: np.ndarray = None,
-        a: np.ndarray = None,
-        h: float = 0.25,
-        max_iter: int = 30,
-        tol: float = 1e-4,
-        patience: int = 1,
-        stop_criterion: Optional[BaseStopCriterion] = None,
-        verbose: bool = False,
-        positive_ref: bool = True
-    ):
-
-        if reference is None:
-            raise ValueError("reference spectrum must be defined")
-
-        if (wavenumbers[1] - wavenumbers[0]) < 0:
-            raise ValueError("wn_reference must be ascending")
-
-        self.reference = reference
-        self.wavenumbers = wavenumbers
-        self.positive_ref = positive_ref
-        self.stop_criterion = stop_criterion
-        if self.stop_criterion is None:
-            self.stop_criterion = TolStopCriterion(max_iter, tol, patience)
-        self.weights = weights
-        if self.weights is None:
-            self.weights = np.ones(len(self.reference))
-        self.n_components = n_components
-        self.verbose = verbose
-
-        self.mie_generator = MatlabMieCurvesGenerator(n0, a, h)
-
-        if self.n_components is None:
-            self.n_components = self._estimate_n_components()
-
-    def transform(self, X: np.ndarray) -> np.ndarray:
-        # wavenumber have to be input as sorted
-        # compute average spectrum from the reference
-        ref_x = self.reference
-        if self.positive_ref:
-            ref_x[ref_x < 0] = 0
-
-        # For the first iteration, make basic EMSC model
-        basic_emsc = EMSC(
-            ref_x, self.wavenumbers,
-            validate_state=False, rebuild_model=False)
-
-        new_spectra = []
-        self.coefs_ = []
-        self.residuals_ = []
-        self.rmse_ = []
-        self.n_iterations_ = []
-        for spectrum in X:
-            pure_guess = ref_x
-            self.stop_criterion.reset()
-            while not self.stop_criterion:
-                try:
-                    pure_guess, coefs, res = self._iteration_step(
-                        spectrum, pure_guess, basic_emsc)
-                    rmse = np.sqrt((1 / len(res[0, :])) * np.sum(res ** 2))
-                    self.stop_criterion.add(rmse, [pure_guess, coefs, res])
-                except np.linalg.LinAlgError:
-                    self.stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
-                    self.stop_criterion.best_idx = -1
-                    break
-            new_spectra.append(self.stop_criterion.best_value[0])
-            self.coefs_.append(self.stop_criterion.best_value[1])
-            self.residuals_.append(self.stop_criterion.best_value[2])
-            self.rmse_.append(self.stop_criterion.best_score)
-            self.n_iterations_.append(self.stop_criterion.best_iter)
-
-        self.coefs_ = np.stack(self.coefs_)
-        self.residuals_ = np.stack(self.residuals_)
-        self.rmse_ = np.stack(self.rmse_)
-        self.n_iterations_ = np.stack(self.n_iterations_)
-
-        return np.stack(new_spectra)
-
-    def _iteration_step(
-            self,
-            spectrum: np.ndarray,
-            reference: np.ndarray,
-            basic_emsc: EMSC,
-    ) -> tuple:
-        # scale with basic EMSC:
-        reference = basic_emsc.transform(reference[None])[0]
-        if np.all(np.isnan(reference)):
-            raise np.linalg.LinAlgError()
-
-        # Apply weights
-        reference = reference * self.weights
-
-        if self.positive_ref:
-            reference[reference < 0] = 0
-
-        # calculate Qext-curves
-        svd = self._generate_mie_curves_and_fit_svd(
-            reference, self.n_components)
-
-        emsc = EMSC(
-            reference=reference, poly_order=0, constituents=svd.components_)
-        new_spectrum = emsc.transform(spectrum[None])[0]
-        # adapt EMSC results to code
-        res = emsc.residuals_
-        coefs = emsc.coefs_[0, [-1, *range(1, self.n_components + 1), 0]]
-
-        return new_spectrum, coefs, res
-
-    def _generate_mie_curves_and_fit_svd(self, reference, n_components):
-        qext = self.mie_generator.generate(reference, self.wavenumbers)
-        qext_orthogonal = orthogonalize_qext(qext, reference)
-
-        svd = TruncatedSVD(n_components, n_iter=7)
-        svd.fit(qext_orthogonal)
-        return svd
-
-    def _estimate_n_components(self):
-        svd = self._generate_mie_curves_and_fit_svd(
-            self.reference, n_components=min(30, len(self.reference) - 1))
-
-        # svd.explained_variance_ is not used since
-        # it is not consistent with matlab code
-        lda = svd.singular_values_ ** 2
-        explained_var = np.cumsum(lda / np.sum(lda)) * 100
-        variance_thresh = 99.96
-        num_comp = np.argmax(explained_var > variance_thresh) + 1
-        return num_comp
