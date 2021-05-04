@@ -68,11 +68,9 @@ class MatlabMieCurvesGenerator:
 
 
 def orthogonalize_qext(qext: np.ndarray, reference: np.ndarray):
-    m = np.dot(reference, reference)
-    norm = np.sqrt(m)
-    rnorm = reference / norm
-    s = np.dot(qext, rnorm)
-    qext_orthogonalized = qext - s[:, np.newaxis] * rnorm[np.newaxis, :]
+    rnorm = reference / np.linalg.norm(reference)
+    s = np.dot(qext, rnorm)[:, None]
+    qext_orthogonalized = qext - s * rnorm
     return qext_orthogonalized
 
 
