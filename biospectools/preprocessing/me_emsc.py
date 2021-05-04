@@ -13,17 +13,11 @@ from biospectools.preprocessing.criterions import \
 
 class MatlabMieCurvesGenerator:
     def __init__(self, n0s=None, rs=None, h=0.25):
-        self.rs = rs
-        if self.rs is None:
-            self.rs = np.linspace(2, 7.1, 10)
-        self.rs = self.rs * 1e-6
-
-        self.n0s = n0s
-        if self.n0s is None:
-            self.n0s = np.linspace(1.1, 1.4, 10)
-
+        self.rs = rs if rs is not None else np.linspace(2, 7.1, 10)
+        self.n0s = n0s if n0s is not None else np.linspace(1.1, 1.4, 10)
         self.h = h
 
+        self.rs = self.rs * 1e-6
         self.alpha0s = 4 * np.pi * self.rs * (self.n0s - 1)
 
         optical_depths = 0.5 * np.pi * self.rs
