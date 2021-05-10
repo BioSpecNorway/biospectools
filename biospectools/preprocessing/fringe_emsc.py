@@ -1,4 +1,4 @@
-from typing import Tuple as T
+from typing import Tuple as T, List
 
 import numpy as np
 import scipy
@@ -16,6 +16,7 @@ class FringeEMSC:
             n_freq: int = 2,
             poly_order: int = 2,
             weights=None,
+            constituents=None,
             scale: bool = True,
             pad_length_multiplier: float = 5,
             double_freq: bool = True,
@@ -27,6 +28,7 @@ class FringeEMSC:
         self.n_freq = n_freq
         self.poly_order = poly_order
         self.weights = weights
+        self.constituents = constituents
         self.scale = scale
         self.pad_length_multiplier = pad_length_multiplier
         self.double_freq = double_freq
@@ -36,27 +38,37 @@ class FringeEMSC:
         spectra = np.asarray(spectra)
         wns = self.wavenumbers
         corrected = []
-        self.emsc_models_ = []
+        emsc_models = []
         self.freqs_ = []
         for spec in spectra:
             freqs = self._find_fringe_frequencies(spec, wns)
-            constituents = np.array([sin_then_cos(freq * wns)
+            fringe_comps = np.array([sin_then_cos(freq * wns)
                                      for freq in freqs
                                      for sin_then_cos in [np.sin, np.cos]])
+            if self.constituents is not None:
+                constituents = np.concatenate((fringe_comps, self.constituents))
+            else:
+                constituents = fringe_comps
             emsc = EMSC(
                 self.reference, wns, self.poly_order,
                 self.weights, constituents, self.scale)
             corr = emsc.transform(spec[None])
 
             corrected.append(corr[0])
-            self.emsc_models_.append(emsc)
+            emsc_models.append(emsc)
             self.freqs_.append(freqs)
 
         self.freqs_ = np.array(self.freqs_)
+        self._gather_emsc_attributes(emsc_models)
         return np.array(corrected)
 
     def clear_state(self):
-        del self.emsc_models_
+        del self.coefs_
+        del self.scaling_coefs_
+        del self.constituents_coefs_
+        del self.polynomial_coefs_
+        del self.residuals_
+        del self.freq_coefs_
         del self.freqs_
 
     def _find_fringe_frequencies(self, raw_spectrum, wavenumbers):
@@ -106,3 +118,36 @@ class FringeEMSC:
             idx_lower, idx_upper = idx_upper, idx_lower
         region = spectra[..., idx_lower: idx_upper]
         return region
+
+    def _gather_emsc_attributes(self, emsc_models: List[EMSC]):
+        self.coefs_ = np.array(
+            [m.coefs_[0] for m in emsc_models])
+        self.scaling_coefs_ = np.array(
+            [m.scaling_coefs_[0] for m in emsc_models])
+        self.residuals_ = np.array(
+            [m.residuals_[0] for m in emsc_models])
+
+        if self.poly_order is not None:
+            all_poly = [m.polynomial_coefs_[0] for m in emsc_models]
+            self.polynomial_coefs_ = np.array(all_poly)
+        else:
+            self.polynomial_coefs_ = None
+
+        if self.constituents is not None:
+            n = len(self.constituents)
+            all_csts = [m.constituents_coefs_[0, -n:] for m in emsc_models]
+            self.constituents_coefs_ = np.array(all_csts)
+        else:
+            self.constituents_coefs_ = None
+
+        self.freq_coefs_ = self._extract_frequencies(emsc_models)
+
+    def _extract_frequencies(self, emsc_models: List[EMSC]):
+        n = self.n_freq
+        if self.double_freq:
+            n *= 2
+
+        # each freq has sine and cosine component
+        freq_coefs = [m.constituents_coefs_[0, :n * 2] for m in emsc_models]
+        freq_coefs = np.array(freq_coefs)
+        return freq_coefs.reshape((-1, n, 2))
