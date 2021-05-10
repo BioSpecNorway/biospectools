@@ -40,7 +40,7 @@ class FringeEMSC:
         self.freqs_ = []
         for spec in spectra:
             freqs = self._find_fringe_frequencies(spec, wns)
-            constituents = np.stack([sin_then_cos(freq * wns)
+            constituents = np.array([sin_then_cos(freq * wns)
                                      for freq in freqs
                                      for sin_then_cos in [np.sin, np.cos]])
             emsc = EMSC(
@@ -52,8 +52,8 @@ class FringeEMSC:
             self.emsc_models_.append(emsc)
             self.freqs_.append(freqs)
 
-        self.freqs_ = np.stack(self.freqs_)
-        return np.stack(corrected)
+        self.freqs_ = np.array(self.freqs_)
+        return np.array(corrected)
 
     def clear_state(self):
         del self.emsc_models_
