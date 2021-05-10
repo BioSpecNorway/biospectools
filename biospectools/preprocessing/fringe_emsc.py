@@ -15,7 +15,7 @@ class FringeEMSC:
             fringe_wn_location: T[float, float],
             n_freq: int = 2,
             poly_order: int = 2,
-            emsc_weights=None,
+            weights=None,
             scale: bool = True,
             pad_length_multiplier: float = 5,
             double_freq: bool = True,
@@ -26,7 +26,7 @@ class FringeEMSC:
         self.fringe_wn_location = fringe_wn_location
         self.n_freq = n_freq
         self.poly_order = poly_order
-        self.emsc_weights = emsc_weights
+        self.weights = weights
         self.scale = scale
         self.pad_length_multiplier = pad_length_multiplier
         self.double_freq = double_freq
@@ -45,7 +45,7 @@ class FringeEMSC:
                                      for sin_then_cos in [np.sin, np.cos]])
             emsc = EMSC(
                 self.reference, wns, self.poly_order,
-                self.emsc_weights, constituents, self.scale)
+                self.weights, constituents, self.scale)
             corr = emsc.transform(spec[None])
 
             corrected.append(corr[0])
