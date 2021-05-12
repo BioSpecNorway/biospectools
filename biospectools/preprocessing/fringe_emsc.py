@@ -50,6 +50,7 @@ class FringeEMSC:
 
         self.freqs_ = np.array(self.freqs_)
         self._gather_emsc_attributes(emsc_models)
+        self._sort_freqs_by_contribution()
         return np.array(corrected)
 
     def clear_state(self):
@@ -79,7 +80,6 @@ class FringeEMSC:
                          for i in freq_idxs]
             freq_idxs = np.concatenate((freq_idxs, neighbors))
 
-        freq_idxs.sort()
         return freqs[freq_idxs]
 
     def _apply_fft(self, region):
@@ -151,3 +151,22 @@ class FringeEMSC:
         # each freq has sine and cosine component
         freq_coefs = np.array([e.constituents_coefs_[0, :n * 2] for e in emscs])
         return freq_coefs.reshape((-1, n, 2))
+
+    def _sort_freqs_by_contribution(self):
+        freq_scores = np.abs(self.freq_coefs_).sum(axis=-1)
+        idxs = np.argsort(-freq_scores, axis=-1)  # descendent
+        idxs = np.unravel_index(idxs, self.freq_coefs_.shape[:2])
+
+        self.freqs_ = self.freqs_[idxs]
+        self.freq_coefs_ = self.freq_coefs_[idxs]
+
+        # fix order in coefs_
+        n = self.n_freq
+        if self.double_freq:
+            n *= 2
+        # take into account that freq's sine and cosine components
+        # are flattened in coefs_ and we want to move sin and cos
+        # together
+        freq_coefs = self.coefs_[:, 1: n * 2 + 1]
+        reordered = freq_coefs.reshape(-1, n, 2)[idxs].reshape(-1, n*2)
+        self.coefs_[:, 1: n * 2 + 1] = reordered
