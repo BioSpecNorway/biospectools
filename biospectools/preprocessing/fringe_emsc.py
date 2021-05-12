@@ -59,7 +59,7 @@ class FringeEMSC:
         del self.constituents_coefs_
         del self.polynomial_coefs_
         del self.residuals_
-        del self.freq_coefs_
+        del self.freqs_coefs_
         del self.freqs_
 
     def _find_fringe_frequencies(self, raw_spectrum):
@@ -141,7 +141,7 @@ class FringeEMSC:
         else:
             self.constituents_coefs_ = None
 
-        self.freq_coefs_ = self._extract_frequencies(emscs)
+        self.freqs_coefs_ = self._extract_frequencies(emscs)
 
     def _extract_frequencies(self, emscs: List[EMSC]):
         n = self.n_freq
@@ -153,12 +153,12 @@ class FringeEMSC:
         return freq_coefs.reshape((-1, n, 2))
 
     def _sort_freqs_by_contribution(self):
-        freq_scores = np.abs(self.freq_coefs_).sum(axis=-1)
+        freq_scores = np.abs(self.freqs_coefs_).sum(axis=-1)
         idxs = np.argsort(-freq_scores, axis=-1)  # descendent
-        idxs = np.unravel_index(idxs, self.freq_coefs_.shape[:2])
+        idxs = np.unravel_index(idxs, self.freqs_coefs_.shape[:2])
 
         self.freqs_ = self.freqs_[idxs]
-        self.freq_coefs_ = self.freq_coefs_[idxs]
+        self.freqs_coefs_ = self.freqs_coefs_[idxs]
 
         # fix order in coefs_
         n = self.n_freq
