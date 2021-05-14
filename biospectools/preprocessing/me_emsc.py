@@ -35,9 +35,7 @@ class MeEMSC:
         self.weights = weights if weights is not None else 1
 
         self.mie_generator = MatlabMieCurvesGenerator(n0, a, h)
-        self.n_components = n_components
-        if self.n_components is None:
-            self.n_components = self._estimate_n_components()
+        self.mie_decomposer = MatlabMieCurvesDecomposer(n_components)
 
         self.stop_criterion = stop_criterion
         if self.stop_criterion is None:
@@ -99,36 +97,18 @@ class MeEMSC:
         if self.positive_ref:
             reference[reference < 0] = 0
 
-        svd = self._generate_mie_curves_and_fit_svd(
-            reference, self.n_components)
+        qexts = self.mie_generator.generate(reference, self.wavenumbers)
+        qexts = orthogonalize_qext(qexts, reference)
+        components = self.mie_decomposer.get_orthogonal_components(qexts)
+
         emsc = EMSC(
-            reference=reference, poly_order=0, constituents=svd.components_)
+            reference=reference, poly_order=0, constituents=components)
         new_spectrum = emsc.transform(spectrum[None])[0]
         # adapt EMSC results to code
         res = emsc.residuals_[0]
-        coefs = emsc.coefs_[0, [-1, *range(1, self.n_components + 1), 0]]
+        coefs = emsc.coefs_[0, [-1, *range(1, len(components) + 1), 0]]
 
         return new_spectrum, coefs, res
-
-    def _generate_mie_curves_and_fit_svd(self, reference, n_components):
-        qext = self.mie_generator.generate(reference, self.wavenumbers)
-        qext_orthogonal = orthogonalize_qext(qext, reference)
-
-        svd = TruncatedSVD(n_components, n_iter=7)
-        svd.fit(qext_orthogonal)
-        return svd
-
-    def _estimate_n_components(self):
-        svd = self._generate_mie_curves_and_fit_svd(
-            self.reference, n_components=min(30, len(self.reference) - 1))
-
-        # svd.explained_variance_ is not used since
-        # it is not consistent with matlab code
-        lda = svd.singular_values_ ** 2
-        explained_var = np.cumsum(lda / np.sum(lda)) * 100
-        variance_thresh = 99.96
-        num_comp = np.argmax(explained_var > variance_thresh) + 1
-        return num_comp
 
 
 class MatlabMieCurvesGenerator:
@@ -183,6 +163,34 @@ class MatlabMieCurvesGenerator:
         idxs_ext = np.arange(-pad_size, len(wns) + pad_size)
         wns_ext = f(idxs_ext)
         return wns_ext
+
+
+class MatlabMieCurvesDecomposer:
+    def __init__(self, n_components: Optional[int]):
+        self.max_components = 30
+        self.explained_thresh = 99.96
+        self.svd = TruncatedSVD(n_components, n_iter=7)
+
+    def get_orthogonal_components(self, qexts: np.ndarray):
+        if self.svd.n_components is None:
+            n_comp = self._estimate_n_components(qexts)
+            self.svd.n_components = n_comp
+            # do not refit svd, since it was fitted during _estimation
+            return self.svd.components_[:n_comp]
+
+        self.svd.fit(qexts)
+        return self.svd.components_
+
+    def _estimate_n_components(self, qexts: np.ndarray):
+        self.svd.n_components = min(self.max_components, qexts.shape[-1] - 1)
+        self.svd.fit(qexts)
+
+        # svd.explained_variance_ is not used since
+        # it is not consistent with matlab code
+        lda = self.svd.singular_values_ ** 2
+        explained_var = np.cumsum(lda / np.sum(lda)) * 100
+        n_comp = np.argmax(explained_var > self.explained_thresh) + 1
+        return n_comp
 
 
 def orthogonalize_qext(qext: np.ndarray, reference: np.ndarray):
