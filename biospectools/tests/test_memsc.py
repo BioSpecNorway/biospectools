@@ -65,6 +65,13 @@ class TestME_EMSC(unittest.TestCase):
             stop_criterion=stop_criterion
         )
         cls.f1data = cls.f1.transform(cls.Spectra)
+        cls.f1_inv = MeEMSC(
+            reference=cls.reference[::-1],
+            wavenumbers=cls.wnS[::-1],
+            weights=None,
+            stop_criterion=stop_criterion
+        )
+        cls.f1data_inv = cls.f1_inv.transform(cls.Spectra[:, ::-1])
 
         stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
         cls.f2 = MeEMSC(
@@ -125,6 +132,7 @@ class TestME_EMSC(unittest.TestCase):
     def test_correction_output(self):
         print("Test Correction")
         np.testing.assert_almost_equal(self.corr_default_20th_elem, self.f1data[0, ::20].T)
+        np.testing.assert_almost_equal(self.corr_default_20th_elem, self.f1data_inv[0, ::-20].T)
         np.testing.assert_almost_equal(self.corr_14ncomp_20th_elem, self.f2data[0, ::20].T)
         np.testing.assert_almost_equal(self.corr_fixed_iter3_20th_elem, self.f3data[0, ::20].T)
 
@@ -132,6 +140,10 @@ class TestME_EMSC(unittest.TestCase):
         print("Test Parameters")
         np.testing.assert_almost_equal(
             abs(self.f1.coefs_[0]),
+            abs(self.param_default_20th_elem),
+        )
+        np.testing.assert_almost_equal(
+            abs(self.f1_inv.coefs_[0]),
             abs(self.param_default_20th_elem),
         )
         np.testing.assert_almost_equal(

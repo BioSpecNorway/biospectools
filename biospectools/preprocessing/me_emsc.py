@@ -29,9 +29,6 @@ class MeEMSC:
             verbose: bool = False):
         self.reference = reference
         self.wavenumbers = wavenumbers
-        if self.wavenumbers[0] > self.wavenumbers[1]:
-            raise ValueError("wavenumbers must be ascending")
-
         self.weights = weights if weights is not None else 1
 
         self.mie_generator = MatlabMieCurvesGenerator(n0, a, h)
@@ -158,7 +155,9 @@ class MatlabMieCurvesGenerator:
 
         # Calculate refractive index
         nprs_ext = pure_ext / wns_ext
-        nkks_ext = -hilbert(nprs_ext).imag
+        nkks_ext = hilbert(nprs_ext).imag
+        if wns_ext[0] < wns_ext[1]:
+            nkks_ext *= -1
 
         nprs = nprs_ext[pad_size:-pad_size]
         nkks = nkks_ext[pad_size:-pad_size]
