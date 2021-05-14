@@ -98,7 +98,7 @@ class MeEMSC:
             reference[reference < 0] = 0
 
         qexts = self.mie_generator.generate(reference, self.wavenumbers)
-        qexts = orthogonalize_qext(qexts, reference)
+        qexts = self._orthogonalize(qexts, reference)
         components = self.mie_decomposer.get_orthogonal_components(qexts)
 
         emsc = EMSC(
@@ -109,6 +109,12 @@ class MeEMSC:
         coefs = emsc.coefs_[0, [-1, *range(1, len(components) + 1), 0]]
 
         return new_spectrum, coefs, res
+
+    def _orthogonalize(self, qext: np.ndarray, reference: np.ndarray):
+        rnorm = reference / np.linalg.norm(reference)
+        s = np.dot(qext, rnorm)[:, None]
+        qext_orthogonalized = qext - s * rnorm
+        return qext_orthogonalized
 
 
 class MatlabMieCurvesGenerator:
@@ -191,10 +197,3 @@ class MatlabMieCurvesDecomposer:
         explained_var = np.cumsum(lda / np.sum(lda)) * 100
         n_comp = np.argmax(explained_var > self.explained_thresh) + 1
         return n_comp
-
-
-def orthogonalize_qext(qext: np.ndarray, reference: np.ndarray):
-    rnorm = reference / np.linalg.norm(reference)
-    s = np.dot(qext, rnorm)[:, None]
-    qext_orthogonalized = qext - s * rnorm
-    return qext_orthogonalized
