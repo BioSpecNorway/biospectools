@@ -42,8 +42,6 @@ class MeEMSC:
         self.verbose = verbose
 
     def transform(self, spectra: np.ndarray) -> np.ndarray:
-        # wavenumber have to be input as sorted
-        # compute average spectrum from the reference
         ref_x = self.reference
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
