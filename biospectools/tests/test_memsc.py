@@ -138,20 +138,24 @@ class TestME_EMSC(unittest.TestCase):
 
     def test_EMSC_parameters(self):
         print("Test Parameters")
+        n_comp = self.f1.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f1.coefs_[0]),
+            abs(self.f1.coefs_[0, [-1, *range(1, n_comp + 1), 0]]),
             abs(self.param_default_20th_elem),
         )
+        n_comp = self.f1_inv.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f1_inv.coefs_[0]),
+            abs(self.f1_inv.coefs_[0, [-1, *range(1, n_comp + 1), 0]]),
             abs(self.param_default_20th_elem),
         )
+        n_comp = self.f2.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f2.coefs_[0]),
+            abs(self.f2.coefs_[0, [-1, *range(1, n_comp + 1), 0]]),
             abs(self.param_14ncomp_20th_elem),
         )
+        n_comp = self.f3.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f3.coefs_[0]),
+            abs(self.f3.coefs_[0, [-1, *range(1, n_comp + 1), 0]]),
             abs(self.param_fixed_iter3_20th_elem),
         )
 

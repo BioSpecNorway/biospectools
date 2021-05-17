@@ -101,7 +101,7 @@ class MeEMSC:
         new_spectrum = emsc.transform(spectrum[None])[0]
         # adapt EMSC results to code
         res = emsc.residuals_[0]
-        coefs = emsc.coefs_[0, [-1, *range(1, len(components) + 1), 0]]
+        coefs = emsc.coefs_[0]
 
         return new_spectrum, coefs, res
 
