@@ -29,7 +29,7 @@ class MeEMSC:
             verbose: bool = False):
         self.reference = reference
         self.wavenumbers = wavenumbers
-        self.weights = weights if weights is not None else 1
+        self.weights = weights
 
         self.mie_generator = MatlabMieCurvesGenerator(n0, a, h)
         self.mie_decomposer = MatlabMieCurvesDecomposer(n_components)
@@ -85,7 +85,8 @@ class MeEMSC:
         if np.all(np.isnan(reference)):
             raise np.linalg.LinAlgError()
 
-        reference = reference * self.weights
+        if self.weights is not None:
+            reference *= self.weights
         if self.positive_ref:
             reference[reference < 0] = 0
 
