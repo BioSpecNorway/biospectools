@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
@@ -52,8 +52,7 @@ class MeEMSC:
             validate_state=False, rebuild_model=False)
 
         new_spectra = []
-        self.coefs_ = []
-        self.residuals_ = []
+        emsc_models = []
         self.rmse_ = []
         self.n_iterations_ = []
         for spectrum in spectra:
@@ -61,28 +60,26 @@ class MeEMSC:
             self.stop_criterion.reset()
             while not self.stop_criterion:
                 try:
-                    pure_guess, coefs, res = self._iteration_step(
-                        spectrum, pure_guess, basic_emsc)
-                    rmse = np.sqrt(np.sum(res ** 2) / len(res))
-                    self.stop_criterion.add(rmse, [pure_guess, coefs, res])
+                    emsc = self._build_emsc(pure_guess, basic_emsc)
+                    pure_guess = emsc.transform(spectrum[None])[0]
+                    rmse = np.sqrt(np.mean(emsc.residuals_[0] ** 2))
+                    self.stop_criterion.add(rmse, [pure_guess, emsc])
                 except np.linalg.LinAlgError:
-                    self.stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
+                    self.stop_criterion.add(np.nan, [np.nan, np.nan])
                     self.stop_criterion.best_idx = -1
                     break
             new_spectra.append(self.stop_criterion.best_value[0])
-            self.coefs_.append(self.stop_criterion.best_value[1])
-            self.residuals_.append(self.stop_criterion.best_value[2])
+            emsc_models.append(self.stop_criterion.best_value[1])
             self.rmse_.append(self.stop_criterion.best_score)
             self.n_iterations_.append(self.stop_criterion.best_iter)
 
-        self.coefs_ = np.stack(self.coefs_)
-        self.residuals_ = np.stack(self.residuals_)
         self.rmse_ = np.stack(self.rmse_)
         self.n_iterations_ = np.stack(self.n_iterations_)
+        self._gather_emsc_attributes(emsc_models)
 
         return np.stack(new_spectra)
 
-    def _iteration_step(self, spectrum, reference, basic_emsc: EMSC) -> tuple:
+    def _build_emsc(self, reference, basic_emsc: EMSC) -> EMSC:
         # scale with basic EMSC:
         reference = basic_emsc.transform(reference[None])[0]
         if np.all(np.isnan(reference)):
@@ -98,18 +95,17 @@ class MeEMSC:
 
         emsc = EMSC(
             reference=reference, poly_order=0, constituents=components)
-        new_spectrum = emsc.transform(spectrum[None])[0]
-        # adapt EMSC results to code
-        res = emsc.residuals_[0]
-        coefs = emsc.coefs_[0]
-
-        return new_spectrum, coefs, res
+        return emsc
 
     def _orthogonalize(self, qext: np.ndarray, reference: np.ndarray):
         rnorm = reference / np.linalg.norm(reference)
         s = np.dot(qext, rnorm)[:, None]
         qext_orthogonalized = qext - s * rnorm
         return qext_orthogonalized
+
+    def _gather_emsc_attributes(self, emscs: List[EMSC]):
+        self.coefs_ = np.array([e.coefs_[0] for e in emscs])
+        self.residuals_ = np.array([e.residuals_[0] for e in emscs])
 
 
 class MatlabMieCurvesGenerator:
