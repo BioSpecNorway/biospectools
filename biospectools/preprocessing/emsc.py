@@ -4,66 +4,118 @@ from typing import Union as U, Tuple as T, Optional as O
 import numpy as np
 
 
+class EMSCInternals:
+    """Class that contains intermediate results of EMSC algorithm.
+
+    Parameters
+    ----------
+    coefs : `(N_samples, 1 + N_constituents + (poly_order + 1) ndarray`
+        All coefficients for each transformed sample. First column is a
+        scaling parameter followed by constituent and polynomial coefs.
+        This is a transposed solution of equation
+        _model @ coefs.T = spectrum.
+    scaling_coefs : `(N_samples,) ndarray`
+        Scaling coefficients (reference to the first column of coefs_).
+    polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
+        Coefficients for each polynomial order.
+    constituents_coefs : `(N_samples, N_constituents) ndarray`
+        Coefficients for each constituent.
+    residuals : `(N_samples, K_channels) ndarray`
+         Chemical residuals that were not fitted by EMSC model.
+
+    Raises
+    ------
+    AttributeError
+        When polynomial's or constituents' coeffs are not available.
+    """
+
+    def __init__(
+            self,
+            coefs: np.ndarray,
+            residuals: np.ndarray,
+            constituents: O[np.ndarray],
+            poly_order: O[int]):
+        assert len(coefs.T) == len(residuals), 'Inconsistent number of spectra'
+
+        self.coefs = coefs.T
+        self.residuals = residuals
+        if constituents is not None:
+            self._n_constituents = len(constituents)
+        else:
+            self._n_constituents = 0
+        if poly_order is not None:
+            self._n_polynomials = poly_order
+        else:
+            self._n_polynomials = 0
+
+    @property
+    def scaling_coefs(self):
+        return self.coefs[:, 0]
+
+    @property
+    def constituents_coefs(self):
+        if self._n_constituents == 0:
+            raise AttributeError(
+                'constituents were not set up. '
+                'Did you forget to call transform?')
+        return self.coefs[:, 1:1 + self._n_constituents]
+
+    @property
+    def polynomial_coefs(self):
+        if self._n_polynomials == 0:
+            raise AttributeError(
+                'poly_order was not set up. '
+                'Did you forget to call transform?')
+        return self.coefs[:, 1 + self._n_constituents:]
+
+
 class EMSC:
     """Extended multiplicative signal correction (EMSC) [1]_.
 
-        Parameters
-        ----------
-        reference : `(K_channels,) ndarray`
-            Reference spectrum.
-        wavenumbers : `(K_channels,) ndarray`, optional
-            Wavenumbers must be passed if given polynomial order
-            is greater than zero.
-        poly_order : `int`, optional (default 2)
-            Order of polynomial to be used in regression model. If None
-            then polynomial will be not used.
-        weights : `(K_channels,) ndarray`, optional
-            Weights for spectra.
-        constituents : `(N_constituents, K_channels) np.ndarray`, optional
-            Chemical constituents for regression model [2]. Can be used to add
-            orthogonal vectors.
-        scale : `bool`, default True
-            If True then spectra will be scaled to reference spectrum.
-        validate_state : `bool`, default True
-            If True, then each time before transform will check whether all
-            shapes are fine. It will also perform check that reference spectrum
-            has high pearson correlation regarding to the mean of given spectra.
-            Otherwise validation will not be performed (for speed).
-        rebuild_model : `bool`, default True
-             If True, then model will be built each time transform is called,
-             this allows to dynamically change parameters of EMSC class.
-             Otherwise model will be built once (for speed).
+    Parameters
+    ----------
+    reference : `(K_channels,) ndarray`
+        Reference spectrum.
+    wavenumbers : `(K_channels,) ndarray`, optional
+        Wavenumbers must be passed if given polynomial order
+        is greater than zero.
+    poly_order : `int`, optional (default 2)
+        Order of polynomial to be used in regression model. If None
+        then polynomial will be not used.
+    weights : `(K_channels,) ndarray`, optional
+        Weights for spectra.
+    constituents : `(N_constituents, K_channels) np.ndarray`, optional
+        Chemical constituents for regression model [2]. Can be used to add
+        orthogonal vectors.
+    scale : `bool`, default True
+        If True then spectra will be scaled to reference spectrum.
+    validate_state : `bool`, default True
+        If True, then each time before transform will check whether all
+        shapes are fine. It will also perform check that reference spectrum
+        has high pearson correlation regarding to the mean of given spectra.
+        Otherwise validation will not be performed (for speed).
+    rebuild_model : `bool`, default True
+         If True, then model will be built each time transform is called,
+         this allows to dynamically change parameters of EMSC class.
+         Otherwise model will be built once (for speed).
 
-        Attributes
-        ----------
-        model_ : `(K_channels, 1 + N_constituents + (poly_order + 1) ndarray`
-            Matrix that is used to solve least squares. First column is a
-            reference spectrum followed by constituents and polynomial columns.
-        coefs_ : `(N_samples, 1 + N_constituents + (poly_order + 1) ndarray`
-            All coefficients for each transformed sample. First column is a
-            scaling parameter followed by constituent and polynomial coefs.
-            This is a transposed solution of equation
-            model_ @ coefs_ = spectrum.
-        scaling_coefs_ : `(N_samples,) ndarray`
-            Scaling coefficients (reference to the first column of coefs_).
-        constituents_coefs_ : `(N_samples, N_constituents) ndarray`
-            Coefficients for each constituent.
-        polynomial_coefs_ : `(N_samples, poly_order + 1) ndarray`
-            Coefficients for each polynomial order.
-        residuals_ : `(N_samples, K_channels) ndarray`
-             Chemical residuals that were not fitted by EMSC model.
-        norm_wns_ : `(K_channels,) ndarray`
-            Normalized wavenumbers to -1, 1 range
+    Other Parameters
+    ----------------
+    _model : `(K_channels, 1 + N_constituents + (poly_order + 1) ndarray`
+        Matrix that is used to solve least squares. First column is a
+        reference spectrum followed by constituents and polynomial columns.
+    _norm_wns : `(K_channels,) ndarray`
+        Normalized wavenumbers to -1, 1 range
 
-        References
-        ----------
-        .. [1] A. Kohler et al. *EMSC: Extended multiplicative
-               signal correction as a tool for separation and
-               characterization of physical and chemical
-               information  in  fourier  transform  infrared
-               microscopy  images  of  cryo-sections  of
-               beef loin.* Applied spectroscopy, 59(6):707–716, 2005.
-        """
+    References
+    ----------
+    .. [1] A. Kohler et al. *EMSC: Extended multiplicative
+           signal correction as a tool for separation and
+           characterization of physical and chemical
+           information  in  fourier  transform  infrared
+           microscopy  images  of  cryo-sections  of
+           beef loin.* Applied spectroscopy, 59(6):707–716, 2005.
+    """
 
     # TODO: Add numpy typing for array-like objects?
     def __init__(
@@ -92,31 +144,41 @@ class EMSC:
         self.validate_state = validate_state
         self.rebuild_model = rebuild_model
 
-    def transform(self, spectra):
+        # lazy init during transform
+        # allows to change dynamically EMSC's parameters
+        self._model = None
+        self._norm_wns = None
+
+    def transform(
+            self,
+            spectra,
+            internals: bool = False) \
+            -> U[np.ndarray, T[np.ndarray, EMSCInternals]]:
         spectra = np.asarray(spectra)
         if self.validate_state:
             self._validate(spectra)
 
-        if self.rebuild_model or not hasattr(self, 'model_'):
-            self.model_ = self._build_model()
+        if self.rebuild_model or not hasattr(self, '_model'):
+            self._norm_wns = self._normalize_wns()
+            self._model = self._build_model()
 
-        self.coefs_ = self._solve_lstsq(spectra)
-        self.residuals_ = spectra - np.dot(self.model_, self.coefs_).T
-        self._unpack_and_transpose_coefs()
+        coefs = self._solve_lstsq(spectra)
+        residuals = spectra - np.dot(self._model, coefs).T
 
-        corr = self.reference + self.residuals_ / self.scaling_coefs_[:, None]
+        scaling = coefs[0]
+        corr = self.reference + residuals / scaling[:, None]
         if not self.scale:
-            corr *= self.scaling_coefs_
+            corr *= scaling[:, None]
 
+        if internals:
+            internals_ = EMSCInternals(
+                coefs, residuals, self.constituents, self.poly_order)
+            return corr, internals_
         return corr
 
     def clear_state(self):
-        del self.model_
-        del self.coefs_
-        del self.scaling_coefs_
-        del self.constituents_coefs_
-        del self.polynomial_coefs_
-        del self.residuals_
+        del self._model
+        del self._norm_wns
 
     def _build_model(self):
         columns = [self.reference]
@@ -126,31 +188,15 @@ class EMSC:
             columns.append(np.ones_like(self.reference))
             if self.poly_order > 0:
                 n = self.poly_order + 1
-                self.norm_wns_ = self._normalize_wns()
-                columns.extend(self.norm_wns_ ** pwr for pwr in range(1, n))
+                columns.extend(self._norm_wns ** pwr for pwr in range(1, n))
         return np.stack(columns, axis=1)
 
     def _solve_lstsq(self, spectra):
         if self.weights is None:
-            return np.linalg.lstsq(self.model_, spectra.T, rcond=None)[0]
+            return np.linalg.lstsq(self._model, spectra.T, rcond=None)[0]
         else:
             w = self.weights[:, None]
-            return np.linalg.lstsq(self.model_ * w, spectra.T * w, rcond=None)[0]
-
-    def _unpack_and_transpose_coefs(self):
-        self.scaling_coefs_ = self.coefs_[0]
-        if self.constituents is not None:
-            n = len(self.constituents)
-            self.constituents_coefs_ = self.coefs_[1: 1 + n].T
-        else:
-            n = 0
-            self.constituents_coefs_ = None
-        if self.poly_order is not None:
-            self.polynomial_coefs_ = self.coefs_[1 + n:].T
-        else:
-            self.polynomial_coefs_ = None
-
-        self.coefs_ = self.coefs_.T
+            return np.linalg.lstsq(self._model * w, spectra.T * w, rcond=None)[0]
 
     def _validate(self, spectra):
         if (self.poly_order is not None
@@ -177,6 +223,8 @@ class EMSC:
                 f'the same order as spectra.')
 
     def _normalize_wns(self):
+        if self.wavenumbers is None:
+            return None
         half_rng = np.abs(self.wavenumbers[0] - self.wavenumbers[-1]) / 2
         return (self.wavenumbers - np.mean(self.wavenumbers)) / half_rng
 

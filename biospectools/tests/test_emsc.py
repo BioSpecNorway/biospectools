@@ -205,34 +205,35 @@ class TestEmscClass:
             self, wavenumbers, multiplied_spectra,
             spectra, mult_coefs):
         emsc = EMSC(multiplied_spectra.mean(axis=0), wavenumbers)
-        corrected = emsc.transform(multiplied_spectra)
+        corrected, inn = emsc.transform(multiplied_spectra, internals=True)
 
         mean = mult_coefs.mean()
         assert_array_almost_equal(corrected, spectra * mean)
-        assert_array_almost_equal(emsc.scaling_coefs_ * mean, mult_coefs[:, 0])
-        assert_array_almost_equal(emsc.coefs_[:, 0] * mean, mult_coefs[:, 0])
+        assert_array_almost_equal(inn.scaling_coefs * mean, mult_coefs[:, 0])
+        assert_array_almost_equal(inn.coefs[:, 0] * mean, mult_coefs[:, 0])
 
     def test_multiplicative_correction_with_reference(
             self, wavenumbers, base_spectrum, multiplied_spectra,
             spectra, mult_coefs):
         emsc = EMSC(base_spectrum, poly_order=0)
-        corrected = emsc.transform(multiplied_spectra)
+        corrected, inn = emsc.transform(multiplied_spectra, internals=True)
 
         assert_array_almost_equal(corrected, spectra)
-        assert_array_almost_equal(emsc.scaling_coefs_, mult_coefs[:, 0])
-        assert_array_almost_equal(emsc.coefs_[:, 0], mult_coefs[:, 0])
+        assert_array_almost_equal(inn.scaling_coefs, mult_coefs[:, 0])
+        assert_array_almost_equal(inn.coefs[:, 0], mult_coefs[:, 0])
 
     def test_linear_correction(
             self, wavenumbers, base_spectrum, spectra_linear_effect,
             spectra, linear_coefs):
         emsc = EMSC(base_spectrum, wavenumbers)
-        corrected = emsc.transform(spectra_linear_effect)
+        corrected, inn = emsc.transform(spectra_linear_effect, internals=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(
-            emsc.polynomial_coefs_[:, 1], linear_coefs[:, 0])
-        assert_array_almost_equal(emsc.coefs_[:, 2], linear_coefs[:, 0])
-        assert emsc.constituents_coefs_ is None
+            inn.polynomial_coefs[:, 1], linear_coefs[:, 0])
+        assert_array_almost_equal(inn.coefs[:, 2], linear_coefs[:, 0])
+        with pytest.raises(AttributeError):
+            inn.constituents_coefs
 
     def test_constituents(
             self, wavenumbers, base_spectrum,
@@ -240,13 +241,15 @@ class TestEmscClass:
             spectra, constituent_coefs):
         emsc = EMSC(base_spectrum, wavenumbers,
                     poly_order=None, constituents=constituent[None])
-        corrected = emsc.transform(spectra_with_constituent)
+        corrected, inn = emsc.transform(
+            spectra_with_constituent, internals=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(
-            emsc.constituents_coefs_[:, 0], constituent_coefs[:, 0])
-        assert_array_almost_equal(emsc.coefs_[:, 1], constituent_coefs[:, 0])
-        assert emsc.polynomial_coefs_ is None
+            inn.constituents_coefs[:, 0], constituent_coefs[:, 0])
+        assert_array_almost_equal(inn.coefs[:, 1], constituent_coefs[:, 0])
+        with pytest.raises(AttributeError):
+            inn.polynomial_coefs
 
     def test_emsc_parameters(self, emsc_data, emsc_quartic_params):
         """
@@ -275,18 +278,18 @@ class TestEmscClass:
         residuals_standard = emsc_data.iloc[6:8].values
 
         emsc = EMSC(raw_spectra.mean(axis=0), wns, poly_order=4)
-        corrected = emsc.transform(raw_spectra)
+        corrected, inn = emsc.transform(raw_spectra, internals=True)
 
         # scale coefficients to Achim's implementation
-        emsc.coefs_[:, 2] *= -1
-        emsc.coefs_[:, 4] *= 2
+        inn.coefs[:, 2] *= -1
+        inn.coefs[:, 4] *= 2
 
         assert_array_almost_equal(corrected, corrected_standard)
-        assert_array_almost_equal(emsc.residuals_, residuals_standard)
+        assert_array_almost_equal(inn.residuals, residuals_standard)
         assert_array_almost_equal(
-            emsc_quartic_params[:, :-1], emsc.polynomial_coefs_)
+            emsc_quartic_params[:, :-1], inn.polynomial_coefs)
         assert_array_almost_equal(
-            emsc_quartic_params[:, -1], emsc.scaling_coefs_)
+            emsc_quartic_params[:, -1], inn.scaling_coefs)
 
     def test_weighting(self, emsc_data, emsc_weights_params):
         """
@@ -301,14 +304,14 @@ class TestEmscClass:
         residuals_standard = emsc_data.iloc[10:12].values
 
         emsc = EMSC(raw_spectra.mean(axis=0), wns, weights=weights)
-        corrected = emsc.transform(raw_spectra)
+        corrected, inn = emsc.transform(raw_spectra, internals=True)
 
         # scale coefficients to Achim's implementation
-        emsc.coefs_[:, 2] *= -1
+        inn.coefs[:, 2] *= -1
 
         assert_array_almost_equal(corrected, corrected_standard)
-        assert_array_almost_equal(emsc.residuals_, residuals_standard)
+        assert_array_almost_equal(inn.residuals, residuals_standard)
         assert_array_almost_equal(
-            emsc_weights_params[:, :-3], emsc.polynomial_coefs_)
+            emsc_weights_params[:, :-3], inn.polynomial_coefs)
         assert_array_almost_equal(
-            emsc_weights_params[:, -3], emsc.scaling_coefs_)
+            emsc_weights_params[:, -3], inn.scaling_coefs)
