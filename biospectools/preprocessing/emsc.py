@@ -33,8 +33,8 @@ class EMSCInternals:
             self,
             coefs: np.ndarray,
             residuals: np.ndarray,
-            constituents: O[np.ndarray],
-            poly_order: O[int]):
+            poly_order: O[int],
+            constituents: O[np.ndarray]):
         assert len(coefs.T) == len(residuals), 'Inconsistent number of spectra'
 
         self.coefs = coefs.T
@@ -167,7 +167,7 @@ class EMSC:
 
         if internals:
             internals_ = EMSCInternals(
-                coefs, residuals, self.constituents, self.poly_order)
+                coefs, residuals, self.poly_order, self.constituents)
             return corr, internals_
         return corr
 
