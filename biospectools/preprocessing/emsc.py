@@ -49,11 +49,11 @@ class EMSCInternals:
             self._n_polynomials = 0
 
     @property
-    def scaling_coefs(self):
+    def scaling_coefs(self) -> np.ndarray:
         return self.coefs[:, 0]
 
     @property
-    def constituents_coefs(self):
+    def constituents_coefs(self) -> np.ndarray:
         if self._n_constituents == 0:
             raise AttributeError(
                 'constituents were not set up. '
@@ -61,7 +61,7 @@ class EMSCInternals:
         return self.coefs[:, 1:1 + self._n_constituents]
 
     @property
-    def polynomial_coefs(self):
+    def polynomial_coefs(self) -> np.ndarray:
         if self._n_polynomials == 0:
             raise AttributeError(
                 'poly_order was not set up. '
