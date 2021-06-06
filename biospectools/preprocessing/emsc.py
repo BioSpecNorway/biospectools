@@ -89,11 +89,6 @@ class EMSC:
         orthogonal vectors.
     scale : `bool`, default True
         If True then spectra will be scaled to reference spectrum.
-    validate_state : `bool`, default True
-        If True, then each time before transform will check whether all
-        shapes are fine. It will also perform check that reference spectrum
-        has high pearson correlation regarding to the mean of given spectra.
-        Otherwise validation will not be performed (for speed).
     rebuild_model : `bool`, default True
          If True, then model will be built each time transform is called,
          this allows to dynamically change parameters of EMSC class.
@@ -126,7 +121,6 @@ class EMSC:
             constituents=None,
             weights=None,
             scale: bool = True,
-            validate_state: bool = True,
             rebuild_model: bool = True,
     ):
         self.reference = np.asarray(reference)
@@ -141,7 +135,6 @@ class EMSC:
         if self.constituents is not None:
             self.constituents = np.asarray(constituents)
         self.scale = scale
-        self.validate_state = validate_state
         self.rebuild_model = rebuild_model
 
         # lazy init during transform
@@ -152,11 +145,13 @@ class EMSC:
     def transform(
             self,
             spectra,
-            internals: bool = False) \
+            internals: bool = False,
+            check_correlation: bool = True) \
             -> U[np.ndarray, T[np.ndarray, EMSCInternals]]:
         spectra = np.asarray(spectra)
-        if self.validate_state:
-            self._validate(spectra)
+        self._validate_inputs()
+        if check_correlation:
+            self._check_high_correlation(spectra)
 
         if self.rebuild_model or not hasattr(self, '_model'):
             self._norm_wns = self._normalize_wns()
@@ -198,7 +193,7 @@ class EMSC:
             w = self.weights[:, None]
             return np.linalg.lstsq(self._model * w, spectra.T * w, rcond=None)[0]
 
-    def _validate(self, spectra):
+    def _validate_inputs(self):
         if (self.poly_order is not None
                 and self.poly_order < 0):
             raise ValueError(
@@ -213,7 +208,7 @@ class EMSC:
             raise ValueError(
                 "Shape of wavenumbers doesn't match reference spectrum")
 
-        # check pearson of wavenumbers
+    def _check_high_correlation(self, spectra):
         mean = spectra.mean(axis=0)
         score = np.corrcoef(mean, self.reference)[0, 1]
         if score < 0.7:
