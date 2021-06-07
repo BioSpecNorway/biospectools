@@ -52,20 +52,22 @@ def test_fring_emsc(
         pure_spectrum, wavenumbers, fringe_wn_location=(1724, 1924),
         constituents=constituent[None],
         n_freq=2, double_freq=True)
-    corrected = fringe_emsc.transform(spectrum_with_fringe[None])[0]
+    corrected, inn = fringe_emsc.transform(
+        spectrum_with_fringe[None], internals=True)
+    corrected = corrected[0]
 
     np.testing.assert_almost_equal(corrected, pure_spectrum)
-    assert len(fringe_emsc.freqs_[0]) == 4
-    np.testing.assert_almost_equal(fringe_emsc.freqs_[0, :2], freqs)
-    np.testing.assert_almost_equal(fringe_emsc.freqs_coefs_[0, :2], amps)
-    np.testing.assert_almost_equal(fringe_emsc.freqs_coefs_[0, 2:], 0)
-    np.testing.assert_almost_equal(fringe_emsc.scaling_coefs_[0], 0.1)
-    np.testing.assert_almost_equal(fringe_emsc.constituents_coefs_[0, 0], 3)
+    assert len(inn.freqs[0]) == 4
+    np.testing.assert_almost_equal(inn.freqs[0, :2], freqs)
+    np.testing.assert_almost_equal(inn.freqs_coefs[0, :2], amps)
+    np.testing.assert_almost_equal(inn.freqs_coefs[0, 2:], 0)
+    np.testing.assert_almost_equal(inn.scaling_coefs[0], 0.1)
+    np.testing.assert_almost_equal(inn.constituents_coefs[0, 0], 3)
 
     coefs = np.concatenate((
-        fringe_emsc.scaling_coefs_[:, None],
-        fringe_emsc.freqs_coefs_.reshape(1, -1),
-        fringe_emsc.constituents_coefs_,
-        fringe_emsc.polynomial_coefs_
+        inn.scaling_coefs[:, None],
+        inn.freqs_coefs.reshape(1, -1),
+        inn.constituents_coefs,
+        inn.polynomial_coefs
     ), axis=1)
-    np.testing.assert_almost_equal(fringe_emsc.coefs_, coefs)
+    np.testing.assert_almost_equal(inn.coefs, coefs)

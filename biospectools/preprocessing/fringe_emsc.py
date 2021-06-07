@@ -1,10 +1,60 @@
-from typing import Tuple as T, List
+from typing import Tuple as T, List, Union as U
 
 import numpy as np
 import scipy
 from scipy.signal import windows
 
 from biospectools.preprocessing import EMSC
+from biospectools.preprocessing.emsc import EMSCInternals
+
+
+class FringeEMSCInternals:
+    def __init__(self, emsc_internals: List[EMSCInternals], freqs):
+        self.freqs = np.array(freqs)
+        self._gather_emsc_attributes(emsc_internals)
+        self._sort_freqs_by_contribution()
+        pass
+
+    def _gather_emsc_attributes(self, emscs: List[EMSCInternals]):
+        self.coefs = np.array([e.coefs[0] for e in emscs])
+        self.scaling_coefs = np.array([e.scaling_coefs[0] for e in emscs])
+        self.residuals = np.array([e.residuals[0] for e in emscs])
+
+        try:
+            self.polynomial_coefs = np.array(
+                [e.polynomial_coefs[0] for e in emscs])
+        except AttributeError:
+            pass
+
+        self.freqs_coefs = self._extract_frequencies(emscs)
+
+        n_freq_coefs = self.freqs.shape[1] * 2
+        if emscs[0].constituents_coefs.shape[1] > n_freq_coefs:
+            self.constituents_coefs = np.array(
+                [e.constituents_coefs[0, n_freq_coefs*2:] for e in emscs])
+
+    def _extract_frequencies(self, emscs: List[EMSCInternals]):
+        n = self.freqs.shape[1]
+        # each freq has sine and cosine component
+        freq_coefs = np.array([e.constituents_coefs[0, :n * 2] for e in emscs])
+        return freq_coefs.reshape((-1, n, 2))
+
+    def _sort_freqs_by_contribution(self):
+        freq_scores = np.abs(self.freqs_coefs).sum(axis=-1)
+        idxs = np.argsort(-freq_scores, axis=-1)  # descendent
+        idxs = np.unravel_index(idxs, self.freqs_coefs.shape[:2])
+
+        self.freqs = self.freqs[idxs]
+        self.freqs_coefs = self.freqs_coefs[idxs]
+
+        # fix order in coefs_
+        # take into account that freq's sine and cosine components
+        # are flattened in coefs_ and we want to move sin and cos
+        # together
+        n = self.freqs.shape[1]
+        freq_coefs = self.coefs[:, 1: n * 2 + 1]
+        reordered = freq_coefs.reshape(-1, n, 2)[idxs].reshape(-1, n*2)
+        self.coefs[:, 1: n * 2 + 1] = reordered
 
 
 class FringeEMSC:
@@ -34,33 +84,30 @@ class FringeEMSC:
         self.double_freq = double_freq
         self.window_function = window_function
 
-    def transform(self, spectra):
+    def transform(
+            self,
+            spectra,
+            internals=False) \
+            -> U[np.ndarray, T[np.ndarray, FringeEMSCInternals]]:
         spectra = np.asarray(spectra)
+
         corrected = []
-        emsc_models = []
-        self.freqs_ = []
+        emscs_internals = []
+        all_freqs = []
         for spec in spectra:
             freqs = self._find_fringe_frequencies(spec)
             emsc = self._build_emsc(freqs)
-            corr = emsc.transform(spec[None])
+            corr, inns = emsc.transform(spec[None], internals=True)
 
             corrected.append(corr[0])
-            emsc_models.append(emsc)
-            self.freqs_.append(freqs)
+            emscs_internals.append(inns)
+            all_freqs.append(freqs)
+        corrected = np.array(corrected)
 
-        self.freqs_ = np.array(self.freqs_)
-        self._gather_emsc_attributes(emsc_models)
-        self._sort_freqs_by_contribution()
-        return np.array(corrected)
-
-    def clear_state(self):
-        del self.coefs_
-        del self.scaling_coefs_
-        del self.constituents_coefs_
-        del self.polynomial_coefs_
-        del self.residuals_
-        del self.freqs_coefs_
-        del self.freqs_
+        if internals:
+            inn = FringeEMSCInternals(emscs_internals, all_freqs)
+            return corrected, inn
+        return corrected
 
     def _find_fringe_frequencies(self, raw_spectrum):
         region = self._select_fringe_region(raw_spectrum)
@@ -76,6 +123,7 @@ class FringeEMSC:
 
         if self.double_freq:
             ft = f_transform
+            #FIXME: out of bounds?
             neighbors = [i + 1 if ft[i + 1] > ft[i - 1] else i - 1
                          for i in freq_idxs]
             freq_idxs = np.concatenate((freq_idxs, neighbors))
@@ -100,7 +148,7 @@ class FringeEMSC:
             constituents = fringe_comps
         emsc = EMSC(
             self.reference, self.wavenumbers, self.poly_order,
-            self.weights, constituents, self.scale)
+            constituents, self.weights, self.scale)
         return emsc
 
     def _padded_region_length(self, region):
@@ -122,51 +170,3 @@ class FringeEMSC:
             idx_lower, idx_upper = idx_upper, idx_lower
         region = spectra[..., idx_lower: idx_upper]
         return region
-
-    def _gather_emsc_attributes(self, emscs: List[EMSC]):
-        self.coefs_ = np.array([e.coefs_[0] for e in emscs])
-        self.scaling_coefs_ = np.array([e.scaling_coefs_[0] for e in emscs])
-        self.residuals_ = np.array([e.residuals_[0] for e in emscs])
-
-        if self.poly_order is not None:
-            self.polynomial_coefs_ = np.array([e.polynomial_coefs_[0]
-                                               for e in emscs])
-        else:
-            self.polynomial_coefs_ = None
-
-        if self.constituents is not None:
-            n = len(self.constituents)
-            self.constituents_coefs_ = np.array([e.constituents_coefs_[0, -n:]
-                                                 for e in emscs])
-        else:
-            self.constituents_coefs_ = None
-
-        self.freqs_coefs_ = self._extract_frequencies(emscs)
-
-    def _extract_frequencies(self, emscs: List[EMSC]):
-        n = self.n_freq
-        if self.double_freq:
-            n *= 2
-
-        # each freq has sine and cosine component
-        freq_coefs = np.array([e.constituents_coefs_[0, :n * 2] for e in emscs])
-        return freq_coefs.reshape((-1, n, 2))
-
-    def _sort_freqs_by_contribution(self):
-        freq_scores = np.abs(self.freqs_coefs_).sum(axis=-1)
-        idxs = np.argsort(-freq_scores, axis=-1)  # descendent
-        idxs = np.unravel_index(idxs, self.freqs_coefs_.shape[:2])
-
-        self.freqs_ = self.freqs_[idxs]
-        self.freqs_coefs_ = self.freqs_coefs_[idxs]
-
-        # fix order in coefs_
-        n = self.n_freq
-        if self.double_freq:
-            n *= 2
-        # take into account that freq's sine and cosine components
-        # are flattened in coefs_ and we want to move sin and cos
-        # together
-        freq_coefs = self.coefs_[:, 1: n * 2 + 1]
-        reordered = freq_coefs.reshape(-1, n, 2)[idxs].reshape(-1, n*2)
-        self.coefs_[:, 1: n * 2 + 1] = reordered
