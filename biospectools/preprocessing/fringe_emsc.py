@@ -97,7 +97,8 @@ class FringeEMSC:
         for spec in spectra:
             freqs = self._find_fringe_frequencies(spec)
             emsc = self._build_emsc(freqs)
-            corr, inns = emsc.transform(spec[None], internals=True)
+            corr, inns = emsc.transform(
+                spec[None], internals=True, check_correlation=False)
 
             corrected.append(corr[0])
             emscs_internals.append(inns)
