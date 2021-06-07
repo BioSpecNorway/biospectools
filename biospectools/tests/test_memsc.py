@@ -64,14 +64,15 @@ class TestME_EMSC(unittest.TestCase):
             weights=None,
             stop_criterion=stop_criterion
         )
-        cls.f1data = cls.f1.transform(cls.Spectra)
+        cls.f1data, cls.f1inn = cls.f1.transform(cls.Spectra, internals=True)
         cls.f1_inv = MeEMSC(
             reference=cls.reference[::-1],
             wavenumbers=cls.wnS[::-1],
             weights=None,
             stop_criterion=stop_criterion
         )
-        cls.f1data_inv = cls.f1_inv.transform(cls.Spectra[:, ::-1])
+        cls.f1data_inv, cls.f1inn_inv = cls.f1_inv.transform(
+            cls.Spectra[:, ::-1], internals=True)
 
         stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
         cls.f2 = MeEMSC(
@@ -80,14 +81,14 @@ class TestME_EMSC(unittest.TestCase):
             n_components=14,
             stop_criterion=stop_criterion
         )  # With weights
-        cls.f2data = cls.f2.transform(cls.Spectra)
+        cls.f2data, cls.f2inn = cls.f2.transform(cls.Spectra, internals=True)
 
         cls.f3 = MeEMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
             max_iter=1
         )
-        cls.f3data = cls.f3.transform(cls.Spectra)
+        cls.f3data, cls.f3inn = cls.f3.transform(cls.Spectra, internals=True)
 
     def disabled_test_plotting(self):
         import matplotlib.pyplot as plt
@@ -140,35 +141,35 @@ class TestME_EMSC(unittest.TestCase):
         print("Test Parameters")
         n_comp = self.f1.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f1.coefs_[0, [-1, *range(1, n_comp + 1), 0]]),
+            abs(self.f1inn.coefs[0, [-1, *range(1, n_comp + 1), 0]]),
             abs(self.param_default_20th_elem),
         )
         n_comp = self.f1_inv.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f1_inv.coefs_[0, [-1, *range(1, n_comp + 1), 0]]),
+            abs(self.f1inn_inv.coefs[0, [-1, *range(1, n_comp + 1), 0]]),
             abs(self.param_default_20th_elem),
         )
         n_comp = self.f2.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f2.coefs_[0, [-1, *range(1, n_comp + 1), 0]]),
+            abs(self.f2inn.coefs[0, [-1, *range(1, n_comp + 1), 0]]),
             abs(self.param_14ncomp_20th_elem),
         )
         n_comp = self.f3.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f3.coefs_[0, [-1, *range(1, n_comp + 1), 0]]),
+            abs(self.f3inn.coefs[0, [-1, *range(1, n_comp + 1), 0]]),
             abs(self.param_fixed_iter3_20th_elem),
         )
 
     def test_number_iterations(self):
         print("Test Iters")
         numiter = np.vstack((
-            self.f1.n_iterations_,
-            self.f2.n_iterations_,
-            self.f3.n_iterations_))
+            self.f1inn.n_iterations,
+            self.f2inn.n_iterations,
+            self.f3inn.n_iterations))
         np.testing.assert_equal(numiter, self.numiter_std)
 
     def test_RMSE(self):
-        RMSE = np.array([self.f1.rmse_, self.f2.rmse_, self.f3.rmse_])
+        RMSE = np.array([self.f1inn.rmses, self.f2inn.rmses, self.f3inn.rmses])
         np.testing.assert_equal(np.round(RMSE, decimals=4), self.RMSE_std)
 
     def test_same_data_reference(self):

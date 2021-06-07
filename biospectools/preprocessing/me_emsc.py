@@ -1,4 +1,5 @@
-from typing import Optional, List
+from typing import Optional, List, Union as U, Tuple as T
+import copy
 
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
@@ -10,6 +11,21 @@ from biospectools.preprocessing import EMSC
 from biospectools.preprocessing.emsc import EMSCInternals
 from biospectools.preprocessing.criterions import \
     BaseStopCriterion, TolStopCriterion
+
+
+class MeEMSCInternals:
+    def __init__(self, criterions: List[BaseStopCriterion]):
+        self.criterions = criterions
+        self.rmses = [c.best_score for c in criterions]
+        self.n_iterations = [c.best_iter for c in criterions]
+        self.guesses = [c.best_value[0] for c in criterions]
+        self.emscs = [c.best_value[2] for c in criterions]
+        emsc_inns = [c.best_value[1] for c in criterions]
+        self._gather_emsc_attributes(emsc_inns)
+
+    def _gather_emsc_attributes(self, emsc_inns: List[EMSCInternals]):
+        self.coefs = np.array([ei.coefs[0] for ei in emsc_inns])
+        self.residuals = np.array([ei.residuals[0] for ei in emsc_inns])
 
 
 class MeEMSC:
@@ -42,7 +58,8 @@ class MeEMSC:
         self.positive_ref = positive_ref
         self.verbose = verbose
 
-    def transform(self, spectra: np.ndarray) -> np.ndarray:
+    def transform(self, spectra: np.ndarray, internals=False) \
+            -> U[np.ndarray, T[np.ndarray, MeEMSCInternals]]:
         ref_x = self.reference
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
@@ -52,9 +69,7 @@ class MeEMSC:
             ref_x, self.wavenumbers, rebuild_model=False)
 
         new_spectra = []
-        emsc_models = []
-        self.rmse_ = []
-        self.n_iterations_ = []
+        criterions = []
         for spectrum in spectra:
             pure_guess = ref_x
             self.stop_criterion.reset()
@@ -65,20 +80,17 @@ class MeEMSC:
                         spectrum[None], internals=True, check_correlation=False)
                     pure_guess = pure_guess[0]
                     rmse = np.sqrt(np.mean(inn.residuals ** 2))
-                    self.stop_criterion.add(rmse, [pure_guess, inn])
+                    self.stop_criterion.add(rmse, [pure_guess, inn, emsc])
                 except np.linalg.LinAlgError:
-                    self.stop_criterion.add(np.nan, [np.nan, np.nan])
+                    self.stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
                     self.stop_criterion.best_idx = -1
                     break
             new_spectra.append(self.stop_criterion.best_value[0])
-            emsc_models.append(self.stop_criterion.best_value[1])
-            self.rmse_.append(self.stop_criterion.best_score)
-            self.n_iterations_.append(self.stop_criterion.best_iter)
+            if internals:
+                criterions.append(copy.copy(self.stop_criterion))
 
-        self.rmse_ = np.stack(self.rmse_)
-        self.n_iterations_ = np.stack(self.n_iterations_)
-        self._gather_emsc_attributes(emsc_models)
-
+        if internals:
+            return np.array(new_spectra), MeEMSCInternals(criterions)
         return np.stack(new_spectra)
 
     def _build_emsc(self, reference, basic_emsc: EMSC) -> EMSC:
@@ -106,10 +118,6 @@ class MeEMSC:
         s = np.dot(qext, rnorm)[:, None]
         qext_orthogonalized = qext - s * rnorm
         return qext_orthogonalized
-
-    def _gather_emsc_attributes(self, emscs: List[EMSCInternals]):
-        self.coefs_ = np.array([e.coefs[0] for e in emscs])
-        self.residuals_ = np.array([e.residuals[0] for e in emscs])
 
 
 class MatlabMieCurvesGenerator:
