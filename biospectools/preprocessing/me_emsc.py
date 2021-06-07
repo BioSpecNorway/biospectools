@@ -10,22 +10,43 @@ import numexpr as ne
 from biospectools.preprocessing import EMSC
 from biospectools.preprocessing.emsc import EMSCInternals
 from biospectools.preprocessing.criterions import \
-    BaseStopCriterion, TolStopCriterion
+    BaseStopCriterion, TolStopCriterion, EmptyCriterionError
 
 
 class MeEMSCInternals:
+    coefs: np.ndarray
+    residuals: np.ndarray
+    emscs: List[Optional[EMSC]]
+    criterions: List[BaseStopCriterion]
+    rmses: np.ndarray
+    n_iterations: np.ndarray
+
     def __init__(self, criterions: List[BaseStopCriterion]):
         self.criterions = criterions
-        self.rmses = [c.best_score for c in criterions]
-        self.n_iterations = [c.best_iter for c in criterions]
-        self.guesses = [c.best_value[0] for c in criterions]
-        self.emscs = [c.best_value[2] for c in criterions]
-        emsc_inns = [c.best_value[1] for c in criterions]
-        self._gather_emsc_attributes(emsc_inns)
 
-    def _gather_emsc_attributes(self, emsc_inns: List[EMSCInternals]):
-        self.coefs = np.array([ei.coefs[0] for ei in emsc_inns])
-        self.residuals = np.array([ei.residuals[0] for ei in emsc_inns])
+        self._extract_from_criterions()
+
+    def _extract_from_criterions(self):
+        self.emscs = []
+        np_arrs = [[] for _ in range(4)]
+        rmses, iters, coefs, resds = np_arrs
+        for c in self.criterions:
+            try:
+                self.emscs.append(c.best_value[2])
+                emsc_inns: EMSCInternals = c.best_value[1]
+                coefs.append(emsc_inns.coefs[0])
+                resds.append(emsc_inns.residuals[0])
+                rmses.append(c.best_score)
+                iters.append(c.best_iter)
+            except EmptyCriterionError:
+                self.emscs.append(None)
+                coefs.append(np.nan)
+                resds.append(np.nan)
+                rmses.append(np.nan)
+                iters.append(0)
+
+        self.rmses, self.n_iterations, self.coefs, self.residuals = \
+            [np.array(np.broadcast_arrays(*arr)) for arr in np_arrs]
 
 
 class MeEMSC:
@@ -73,19 +94,17 @@ class MeEMSC:
         for spectrum in spectra:
             pure_guess = ref_x
             self.stop_criterion.reset()
-            while not self.stop_criterion:
-                try:
+            try:
+                while not self.stop_criterion:
                     emsc = self._build_emsc(pure_guess, basic_emsc)
                     pure_guess, inn = emsc.transform(
                         spectrum[None], internals=True, check_correlation=False)
                     pure_guess = pure_guess[0]
                     rmse = np.sqrt(np.mean(inn.residuals ** 2))
                     self.stop_criterion.add(rmse, [pure_guess, inn, emsc])
-                except np.linalg.LinAlgError:
-                    self.stop_criterion.add(np.nan, [np.nan, np.nan, np.nan])
-                    self.stop_criterion.best_idx = -1
-                    break
-            new_spectra.append(self.stop_criterion.best_value[0])
+                new_spectra.append(self.stop_criterion.best_value[0])
+            except np.linalg.LinAlgError:
+                new_spectra.append(np.full_like(ref_x, np.nan))
             if internals:
                 criterions.append(copy.copy(self.stop_criterion))
 

@@ -1,9 +1,59 @@
+import pytest
 import unittest
 import numpy as np
-from biospectools.preprocessing.me_emsc import MeEMSC
+from biospectools.preprocessing.me_emsc import MeEMSC, MeEMSCInternals
 from biospectools.utils import at_wavenumbers
 from biospectools.preprocessing.criterions import \
     MatlabStopCriterion, TolStopCriterion
+
+
+@pytest.fixture()
+def criterion_empty():
+    return TolStopCriterion(3, 0, 0)
+
+
+@pytest.fixture()
+def emsc_internals_mock():
+    from unittest import mock
+    inn_mock = mock.Mock()
+    inn_mock.coefs = np.random.rand(1, 10)
+    inn_mock.residuals = np.random.rand(1, 100)
+    return inn_mock
+
+
+@pytest.fixture()
+def criterion_unfinished(emsc_internals_mock):
+    criterion = TolStopCriterion(3, 0, 0)
+    criterion.add(score=0.9, value=[1, emsc_internals_mock, 3])
+    assert not bool(criterion)
+    return criterion
+
+
+@pytest.fixture()
+def criterion_finished(emsc_internals_mock):
+    criterion = TolStopCriterion(3, 0, 0)
+    criterion.add(score=0.9, value=[1, emsc_internals_mock, 3])
+    criterion.add(score=0.5, value=[1, emsc_internals_mock, 3])
+    criterion.add(score=0.6, value=[1, emsc_internals_mock, 3])
+    assert bool(criterion)
+    return criterion
+
+
+def test_me_emsc_internals_only_invalid_criterions(criterion_empty):
+    inn = MeEMSCInternals([criterion_empty, criterion_empty])
+    assert inn.coefs.shape == (2,)
+    assert np.all(np.isnan(inn.coefs[0]))
+    assert np.all(np.isnan(inn.coefs[1]))
+
+
+def test_me_emsc_internals_with_invalid_criterions(
+        criterion_empty, criterion_unfinished, criterion_finished):
+    inn = MeEMSCInternals(
+        [criterion_empty, criterion_unfinished, criterion_finished])
+    assert inn.coefs.shape == (3, 10)
+    assert np.all(np.isnan(inn.coefs[0]))
+    assert np.all(~np.isnan(inn.coefs[1]))
+    assert np.all(~np.isnan(inn.coefs[2]))
 
 
 class TestME_EMSC(unittest.TestCase):

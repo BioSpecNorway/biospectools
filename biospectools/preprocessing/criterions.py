@@ -1,6 +1,10 @@
 import numpy as np
 
 
+class EmptyCriterionError(Exception):
+    pass
+
+
 class BaseStopCriterion:
     def __init__(self, max_iter):
         self.max_iter = max_iter
@@ -31,19 +35,19 @@ class BaseStopCriterion:
     @property
     def best_score(self):
         if len(self.scores) == 0:
-            raise ValueError('Nothing was added')
+            raise EmptyCriterionError('No scores were added')
         return self.scores[self.best_idx]
 
     @property
     def best_value(self):
         if len(self.values) == 0:
-            raise ValueError('Nothing was added')
+            raise EmptyCriterionError('No scores were added')
         return self.values[self.best_idx]
 
     @property
     def best_iter(self):
         if len(self.scores) == 0:
-            raise ValueError('Nothing was added')
+            raise EmptyCriterionError('No scores were added')
         if self.best_idx >= 0:
             return self.best_idx + 1
         else:
