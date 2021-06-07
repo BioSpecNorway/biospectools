@@ -30,14 +30,20 @@ class BaseStopCriterion:
 
     @property
     def best_score(self):
+        if len(self.scores) == 0:
+            raise ValueError('Nothing was added')
         return self.scores[self.best_idx]
 
     @property
     def best_value(self):
+        if len(self.values) == 0:
+            raise ValueError('Nothing was added')
         return self.values[self.best_idx]
 
     @property
     def best_iter(self):
+        if len(self.scores) == 0:
+            raise ValueError('Nothing was added')
         if self.best_idx >= 0:
             return self.best_idx + 1
         else:
