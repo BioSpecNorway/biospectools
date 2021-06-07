@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 import numexpr as ne
 
 from biospectools.preprocessing import EMSC
+from biospectools.preprocessing.emsc import EMSCInternals
 from biospectools.preprocessing.criterions import \
     BaseStopCriterion, TolStopCriterion
 
@@ -48,8 +49,7 @@ class MeEMSC:
 
         # For the first iteration, make basic EMSC model
         basic_emsc = EMSC(
-            ref_x, self.wavenumbers,
-            validate_state=False, rebuild_model=False)
+            ref_x, self.wavenumbers, rebuild_model=False)
 
         new_spectra = []
         emsc_models = []
@@ -61,9 +61,11 @@ class MeEMSC:
             while not self.stop_criterion:
                 try:
                     emsc = self._build_emsc(pure_guess, basic_emsc)
-                    pure_guess = emsc.transform(spectrum[None])[0]
-                    rmse = np.sqrt(np.mean(emsc.residuals_[0] ** 2))
-                    self.stop_criterion.add(rmse, [pure_guess, emsc])
+                    pure_guess, inn = emsc.transform(
+                        spectrum[None], internals=True, check_correlation=False)
+                    pure_guess = pure_guess[0]
+                    rmse = np.sqrt(np.mean(inn.residuals ** 2))
+                    self.stop_criterion.add(rmse, [pure_guess, inn])
                 except np.linalg.LinAlgError:
                     self.stop_criterion.add(np.nan, [np.nan, np.nan])
                     self.stop_criterion.best_idx = -1
@@ -81,7 +83,8 @@ class MeEMSC:
 
     def _build_emsc(self, reference, basic_emsc: EMSC) -> EMSC:
         # scale with basic EMSC:
-        reference = basic_emsc.transform(reference[None])[0]
+        reference = basic_emsc.transform(
+            reference[None], check_correlation=False)[0]
         if np.all(np.isnan(reference)):
             raise np.linalg.LinAlgError()
 
@@ -95,7 +98,7 @@ class MeEMSC:
         components = self.mie_decomposer.get_orthogonal_components(qexts)
 
         emsc = EMSC(
-            reference=reference, poly_order=0, constituents=components)
+            reference, poly_order=0, constituents=components)
         return emsc
 
     def _orthogonalize(self, qext: np.ndarray, reference: np.ndarray):
@@ -104,9 +107,9 @@ class MeEMSC:
         qext_orthogonalized = qext - s * rnorm
         return qext_orthogonalized
 
-    def _gather_emsc_attributes(self, emscs: List[EMSC]):
-        self.coefs_ = np.array([e.coefs_[0] for e in emscs])
-        self.residuals_ = np.array([e.residuals_[0] for e in emscs])
+    def _gather_emsc_attributes(self, emscs: List[EMSCInternals]):
+        self.coefs_ = np.array([e.coefs[0] for e in emscs])
+        self.residuals_ = np.array([e.residuals[0] for e in emscs])
 
 
 class MatlabMieCurvesGenerator:
