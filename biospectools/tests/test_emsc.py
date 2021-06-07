@@ -2,6 +2,7 @@ import os
 import collections
 
 import pytest
+from unittest.mock import patch
 import numpy as np
 from numpy.testing import assert_array_almost_equal
 import pandas as pd
@@ -315,3 +316,15 @@ class TestEmscClass:
             emsc_weights_params[:, :-3], inn.polynomial_coefs)
         assert_array_almost_equal(
             emsc_weights_params[:, -3], inn.scaling_coefs)
+
+    def test_rebuild_model(self, base_spectrum, multiplied_spectra):
+        emsc = EMSC(base_spectrum, poly_order=0, rebuild_model=False)
+        with patch.object(EMSC, '_build_model', wraps=emsc._build_model) as mock:
+            emsc.transform(multiplied_spectra)
+            assert mock.call_count == 1
+            emsc.transform(multiplied_spectra)
+            assert mock.call_count == 1
+            emsc.rebuild_model = True
+            emsc.transform(multiplied_spectra)
+            assert mock.call_count == 2
+

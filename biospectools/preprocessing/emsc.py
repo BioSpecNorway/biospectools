@@ -153,7 +153,7 @@ class EMSC:
         if check_correlation:
             self._check_high_correlation(spectra)
 
-        if self.rebuild_model or not hasattr(self, '_model'):
+        if self.rebuild_model or self._model is None:
             self._norm_wns = self._normalize_wns()
             self._model = self._build_model()
 
