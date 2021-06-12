@@ -126,7 +126,7 @@ class MeEMSC:
 
         qexts = self.mie_generator.generate(reference, self.wavenumbers)
         qexts = self._orthogonalize(qexts, reference)
-        components = self.mie_decomposer.get_orthogonal_components(qexts)
+        components = self.mie_decomposer.find_orthogonal_components(qexts)
 
         emsc = EMSC(
             reference, poly_order=0, constituents=components)
@@ -201,7 +201,7 @@ class MatlabMieCurvesDecomposer:
         self.explained_thresh = 99.96
         self.svd = TruncatedSVD(n_components, n_iter=7)
 
-    def get_orthogonal_components(self, qexts: np.ndarray):
+    def find_orthogonal_components(self, qexts: np.ndarray):
         if self.svd.n_components is None:
             n_comp = self._estimate_n_components(qexts)
             self.svd.n_components = n_comp
