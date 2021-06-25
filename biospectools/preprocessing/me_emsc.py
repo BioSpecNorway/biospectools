@@ -20,9 +20,16 @@ class MeEMSCInternals:
     criterions: List[BaseStopCriterion]
     rmses: np.ndarray
     n_iterations: np.ndarray
+    n_mie_components: int
 
-    def __init__(self, criterions: List[BaseStopCriterion]):
+    def __init__(
+            self,
+            criterions: List[BaseStopCriterion],
+            n_mie_components: int):
         self.criterions = criterions
+        self.n_mie_components = n_mie_components
+        if self.n_mie_components <= 0:
+            raise ValueError('n_components must be greater than 0')
 
         self._extract_from_criterions()
 
@@ -47,6 +54,20 @@ class MeEMSCInternals:
 
         self.rmses, self.n_iterations, self.coefs, self.residuals = \
             [np.array(np.broadcast_arrays(*arr)) for arr in np_arrs]
+
+    @property
+    def scaling_coefs(self) -> np.ndarray:
+        return self.coefs[:, 0]
+
+    @property
+    def mie_components_coefs(self) -> np.ndarray:
+        assert self.n_mie_components > 0, \
+            'Number of mie components must be greater than zero'
+        return self.coefs[:, 1:1 + self.n_mie_components]
+
+    @property
+    def polynomial_coefs(self) -> np.ndarray:
+        return self.coefs[:, -1:]
 
 
 class MeEMSC:
@@ -109,7 +130,9 @@ class MeEMSC:
                 criterions.append(copy.copy(self.stop_criterion))
 
         if internals:
-            return np.array(new_spectra), MeEMSCInternals(criterions)
+            inns = MeEMSCInternals(
+                criterions, self.mie_decomposer.svd.n_components)
+            return np.array(new_spectra), inns
         return np.stack(new_spectra)
 
     def _build_emsc(self, reference, basic_emsc: EMSC) -> EMSC:

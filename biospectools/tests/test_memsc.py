@@ -189,24 +189,20 @@ class TestME_EMSC(unittest.TestCase):
 
     def test_EMSC_parameters(self):
         print("Test Parameters")
-        n_comp = self.f1.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f1inn.coefs[0, [-1, *range(1, n_comp + 1), 0]]),
+            abs(self._matlab_ordered_coefs(self.f1inn)[0]),
             abs(self.param_default_20th_elem),
         )
-        n_comp = self.f1_inv.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f1inn_inv.coefs[0, [-1, *range(1, n_comp + 1), 0]]),
+            abs(self._matlab_ordered_coefs(self.f1inn_inv)[0]),
             abs(self.param_default_20th_elem),
         )
-        n_comp = self.f2.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f2inn.coefs[0, [-1, *range(1, n_comp + 1), 0]]),
+            abs(self._matlab_ordered_coefs(self.f2inn)[0]),
             abs(self.param_14ncomp_20th_elem),
         )
-        n_comp = self.f3.mie_decomposer.svd.n_components
         np.testing.assert_almost_equal(
-            abs(self.f3inn.coefs[0, [-1, *range(1, n_comp + 1), 0]]),
+            abs(self._matlab_ordered_coefs(self.f3inn)[0]),
             abs(self.param_fixed_iter3_20th_elem),
         )
 
@@ -228,6 +224,12 @@ class TestME_EMSC(unittest.TestCase):
         _ = f.transform(self.reference[None, :])
 
         # TODO fix for 1D input array
+
+    def _matlab_ordered_coefs(self, inn: MeEMSCInternals):
+        return np.concatenate((
+            inn.polynomial_coefs,
+            inn.mie_components_coefs,
+            inn.scaling_coefs[:, None]), axis=1)
 
 
 """
