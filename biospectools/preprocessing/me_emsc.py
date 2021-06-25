@@ -131,7 +131,7 @@ class MeEMSC:
 
         if internals:
             inns = MeEMSCInternals(
-                criterions, self.mie_decomposer.svd.n_components)
+                criterions, self.mie_decomposer.n_components)
             return np.array(new_spectra), inns
         return np.stack(new_spectra)
 
@@ -220,16 +220,18 @@ class MatlabMieCurvesGenerator:
 
 class MatlabMieCurvesDecomposer:
     def __init__(self, n_components: Optional[int]):
+        self.n_components = n_components
+        self.svd = TruncatedSVD(self.n_components, n_iter=7)
+
         self.max_components = 30
         self.explained_thresh = 99.96
-        self.svd = TruncatedSVD(n_components, n_iter=7)
 
     def find_orthogonal_components(self, qexts: np.ndarray):
-        if self.svd.n_components is None:
-            n_comp = self._estimate_n_components(qexts)
-            self.svd.n_components = n_comp
+        if self.n_components is None:
+            self.n_components = self._estimate_n_components(qexts)
+            self.svd.n_components = self.n_components
             # do not refit svd, since it was fitted during _estimation
-            return self.svd.components_[:n_comp]
+            return self.svd.components_[:self.n_components]
 
         self.svd.fit(qexts)
         return self.svd.components_
