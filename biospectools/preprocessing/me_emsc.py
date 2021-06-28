@@ -39,8 +39,8 @@ class MeEMSCInternals:
         rmses, iters, coefs, resds = np_arrs
         for c in self.criterions:
             try:
-                self.emscs.append(c.best_value[2])
-                emsc_inns: EMSCInternals = c.best_value[1]
+                self.emscs.append(c.best_value['emsc'])
+                emsc_inns: EMSCInternals = c.best_value['internals']
                 coefs.append(emsc_inns.coefs[0])
                 resds.append(emsc_inns.residuals[0])
                 rmses.append(c.best_score)
@@ -133,8 +133,10 @@ class MeEMSC:
                 spectrum[None], internals=True, check_correlation=False)
             pure_guess = pure_guess[0]
             rmse = np.sqrt(np.mean(inn.residuals ** 2))
-            self.stop_criterion.add(rmse, [pure_guess, inn, emsc])
-        return self.stop_criterion.best_value[0]
+            iter_result = \
+                {'corrected': pure_guess, 'internals': inn, 'emsc': emsc}
+            self.stop_criterion.add(rmse, iter_result)
+        return self.stop_criterion.best_value['corrected']
 
     def _build_emsc(self, reference, basic_emsc: EMSC) -> EMSC:
         # scale with basic EMSC:
