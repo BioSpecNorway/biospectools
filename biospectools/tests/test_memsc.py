@@ -119,7 +119,7 @@ class TestME_EMSC(unittest.TestCase):
             wavenumbers=cls.wnS[::-1],
             weights=None
         )
-        cls.f1_inv = MatlabStopCriterion(max_iter=45, precision=4)
+        cls.f1_inv.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
         cls.f1data_inv, cls.f1inn_inv = cls.f1_inv.transform(
             cls.Spectra[:, ::-1], internals=True)
 
