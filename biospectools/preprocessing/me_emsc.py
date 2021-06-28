@@ -105,35 +105,36 @@ class MeEMSC:
         ref_x = self.reference
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
+        basic_emsc = EMSC(ref_x, self.wavenumbers, rebuild_model=False)
 
-        # For the first iteration, make basic EMSC model
-        basic_emsc = EMSC(
-            ref_x, self.wavenumbers, rebuild_model=False)
-
-        new_spectra = []
+        corr_spectra = []
         criterions = []
         for spectrum in spectra:
-            pure_guess = ref_x
-            self.stop_criterion.reset()
             try:
-                while not self.stop_criterion:
-                    emsc = self._build_emsc(pure_guess, basic_emsc)
-                    pure_guess, inn = emsc.transform(
-                        spectrum[None], internals=True, check_correlation=False)
-                    pure_guess = pure_guess[0]
-                    rmse = np.sqrt(np.mean(inn.residuals ** 2))
-                    self.stop_criterion.add(rmse, [pure_guess, inn, emsc])
-                new_spectra.append(self.stop_criterion.best_value[0])
+                corrected = self._correct_spectrum(basic_emsc, ref_x, spectrum)
             except np.linalg.LinAlgError:
-                new_spectra.append(np.full_like(ref_x, np.nan))
+                corrected = np.full_like(self.wavenumbers, np.nan)
+
+            corr_spectra.append(corrected)
             if internals:
                 criterions.append(copy.copy(self.stop_criterion))
 
         if internals:
             inns = MeEMSCInternals(
                 criterions, self.mie_decomposer.n_components)
-            return np.array(new_spectra), inns
-        return np.stack(new_spectra)
+            return np.array(corr_spectra), inns
+        return np.array(corr_spectra)
+
+    def _correct_spectrum(self, basic_emsc, pure_guess, spectrum):
+        self.stop_criterion.reset()
+        while not self.stop_criterion:
+            emsc = self._build_emsc(pure_guess, basic_emsc)
+            pure_guess, inn = emsc.transform(
+                spectrum[None], internals=True, check_correlation=False)
+            pure_guess = pure_guess[0]
+            rmse = np.sqrt(np.mean(inn.residuals ** 2))
+            self.stop_criterion.add(rmse, [pure_guess, inn, emsc])
+        return self.stop_criterion.best_value[0]
 
     def _build_emsc(self, reference, basic_emsc: EMSC) -> EMSC:
         # scale with basic EMSC:
@@ -151,8 +152,7 @@ class MeEMSC:
         qexts = self._orthogonalize(qexts, reference)
         components = self.mie_decomposer.find_orthogonal_components(qexts)
 
-        emsc = EMSC(
-            reference, poly_order=0, constituents=components)
+        emsc = EMSC(reference, poly_order=0, constituents=components)
         return emsc
 
     def _orthogonalize(self, qext: np.ndarray, reference: np.ndarray):
