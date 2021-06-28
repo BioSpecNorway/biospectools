@@ -107,30 +107,28 @@ class TestME_EMSC(unittest.TestCase):
         cls.reference = at_wavenumbers(cls.wn_ref, cls.wnS, cls.reference)
         cls.reference = cls.reference[0]
 
-        stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
         cls.f1 = MeEMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
             weights=None,
-            stop_criterion=stop_criterion
         )
+        cls.f1.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
         cls.f1data, cls.f1inn = cls.f1.transform(cls.Spectra, internals=True)
         cls.f1_inv = MeEMSC(
             reference=cls.reference[::-1],
             wavenumbers=cls.wnS[::-1],
-            weights=None,
-            stop_criterion=stop_criterion
+            weights=None
         )
+        cls.f1_inv = MatlabStopCriterion(max_iter=45, precision=4)
         cls.f1data_inv, cls.f1inn_inv = cls.f1_inv.transform(
             cls.Spectra[:, ::-1], internals=True)
 
-        stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
         cls.f2 = MeEMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
-            n_components=14,
-            stop_criterion=stop_criterion
+            n_components=14
         )  # With weights
+        cls.f2.stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
         cls.f2data, cls.f2inn = cls.f2.transform(cls.Spectra, internals=True)
 
         cls.f3 = MeEMSC(

@@ -83,7 +83,6 @@ class MeEMSC:
             max_iter: int = 30,
             tol: float = 1e-4,
             patience: int = 1,
-            stop_criterion: Optional[BaseStopCriterion] = None,
             positive_ref: bool = True,
             verbose: bool = False):
         self.reference = reference
@@ -92,10 +91,7 @@ class MeEMSC:
 
         self.mie_generator = MatlabMieCurvesGenerator(n0, a, h)
         self.mie_decomposer = MatlabMieCurvesDecomposer(n_components)
-
-        self.stop_criterion = stop_criterion
-        if self.stop_criterion is None:
-            self.stop_criterion = TolStopCriterion(max_iter, tol, patience)
+        self.stop_criterion = TolStopCriterion(max_iter, tol, patience)
 
         self.positive_ref = positive_ref
         self.verbose = verbose
