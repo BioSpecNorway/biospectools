@@ -107,23 +107,21 @@ class MeEMSC:
             ref_x[ref_x < 0] = 0
         basic_emsc = EMSC(ref_x, self.wavenumbers, rebuild_model=False)
 
-        corr_spectra = []
+        correcteds = []
         criterions = []
         for spectrum in spectra:
             try:
-                corrected = self._correct_spectrum(basic_emsc, ref_x, spectrum)
+                result = self._correct_spectrum(basic_emsc, ref_x, spectrum)
             except np.linalg.LinAlgError:
-                corrected = np.full_like(self.wavenumbers, np.nan)
-
-            corr_spectra.append(corrected)
+                result = np.full_like(self.wavenumbers, np.nan)
+            correcteds.append(result)
             if internals:
                 criterions.append(copy.copy(self.stop_criterion))
 
         if internals:
-            inns = MeEMSCInternals(
-                criterions, self.mie_decomposer.n_components)
-            return np.array(corr_spectra), inns
-        return np.array(corr_spectra)
+            inns = MeEMSCInternals(criterions, self.mie_decomposer.n_components)
+            return np.array(correcteds), inns
+        return np.array(correcteds)
 
     def _correct_spectrum(self, basic_emsc, pure_guess, spectrum):
         self.stop_criterion.reset()
