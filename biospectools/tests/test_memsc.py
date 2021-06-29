@@ -110,15 +110,13 @@ class TestME_EMSC(unittest.TestCase):
         cls.f1 = MeEMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
-            weights=None,
-        )
+            weights=None)
         cls.f1.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
         cls.f1data, cls.f1inn = cls.f1.transform(cls.Spectra, internals=True)
         cls.f1_inv = MeEMSC(
             reference=cls.reference[::-1],
             wavenumbers=cls.wnS[::-1],
-            weights=None
-        )
+            weights=None)
         cls.f1_inv.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
         cls.f1data_inv, cls.f1inn_inv = cls.f1_inv.transform(
             cls.Spectra[:, ::-1], internals=True)
@@ -126,16 +124,14 @@ class TestME_EMSC(unittest.TestCase):
         cls.f2 = MeEMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
-            n_components=14
-        )  # With weights
+            n_components=14)
         cls.f2.stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
         cls.f2data, cls.f2inn = cls.f2.transform(cls.Spectra, internals=True)
 
         cls.f3 = MeEMSC(
             reference=cls.reference,
             wavenumbers=cls.wnS,
-            max_iter=1
-        )
+            max_iter=1)
         cls.f3data, cls.f3inn = cls.f3.transform(cls.Spectra, internals=True)
 
     def disabled_test_plotting(self):

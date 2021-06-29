@@ -75,11 +75,11 @@ class MeEMSC:
             self,
             reference: np.ndarray,
             wavenumbers: np.ndarray,
-            weights: np.ndarray = None,
             n_components: Optional[int] = None,
-            n0: np.ndarray = None,
-            a: np.ndarray = None,
+            n0s: np.ndarray = None,
+            radiuses: np.ndarray = None,
             h: float = 0.25,
+            weights: np.ndarray = None,
             max_iter: int = 30,
             tol: float = 1e-4,
             patience: int = 1,
@@ -89,7 +89,7 @@ class MeEMSC:
         self.wavenumbers = wavenumbers
         self.weights = weights
 
-        self.mie_generator = MatlabMieCurvesGenerator(n0, a, h)
+        self.mie_generator = MatlabMieCurvesGenerator(n0s, radiuses, h)
         self.mie_decomposer = MatlabMieCurvesDecomposer(n_components)
         self.stop_criterion = TolStopCriterion(max_iter, tol, patience)
 
