@@ -1,10 +1,56 @@
+from typing import Optional as O
+
 import pytest
 import unittest
 import numpy as np
+from scipy.interpolate import interp1d
 from biospectools.preprocessing.me_emsc import MeEMSC, MeEMSCInternals
-from biospectools.utils import at_wavenumbers
 from biospectools.preprocessing.criterions import \
     MatlabStopCriterion, TolStopCriterion
+
+
+def at_wavenumbers(
+        from_wavenumbers: np.ndarray,
+        to_wavenumbers: np.ndarray,
+        spectra: np.ndarray,
+        extrapolation_mode: O[str] = None,
+        extrapolation_value: int = 0) -> np.ndarray:
+    """
+    Interpolates spectrum at another wavenumbers
+    :param from_wavenumbers: initial wavenumbers
+    :param to_wavenumbers: to what wavenumbers interpolate
+    :param spectra: spectra
+    :param extrapolation_mode: 'constant' or 'boundary' or None (then raise error)
+    :param extrapolation_value: value to which interpolate in case of
+    constant extrapolation
+    """
+    to_max = to_wavenumbers.max()
+    to_min = to_wavenumbers.min()
+    if from_wavenumbers[0] > from_wavenumbers[-1]:
+        from_wavenumbers = from_wavenumbers[::-1]
+        spectra = spectra[..., ::-1]
+    if to_max > from_wavenumbers.max():
+        if extrapolation_mode is None:
+            raise ValueError('Range of to_wavenumbers exceeds boundaries of from_wavenumbers')
+        from_wavenumbers = np.append(from_wavenumbers, to_max)
+        if extrapolation_mode == 'constant':
+            spectra = np.append(spectra, [extrapolation_value], axis=-1)
+        elif extrapolation_mode == 'boundary':
+            spectra = np.append(spectra, [spectra[..., -1]], axis=-1)
+        else:
+            raise ValueError(f'Unknown extrapolation_mode {extrapolation_mode}')
+    if to_min < from_wavenumbers.min():
+        if extrapolation_mode is None:
+            raise ValueError('Range of to_wavenumbers exceeds boundaries of from_wavenumbers')
+        from_wavenumbers = np.insert(from_wavenumbers, 0, to_min)
+        if extrapolation_mode == 'constant':
+            spectra = np.insert(spectra, 0, [extrapolation_value], axis=-1)
+        elif extrapolation_mode == 'boundary':
+            spectra = np.insert(spectra, 0, [spectra[..., 0]], axis=-1)
+        else:
+            raise ValueError(f'Unknown extrapolation_mode {extrapolation_mode}')
+
+    return interp1d(from_wavenumbers, spectra)(to_wavenumbers)
 
 
 @pytest.fixture()
@@ -24,7 +70,8 @@ def emsc_internals_mock():
 @pytest.fixture()
 def criterion_unfinished(emsc_internals_mock):
     criterion = TolStopCriterion(3, 0, 0)
-    criterion.add(score=0.9, value=[1, emsc_internals_mock, 3])
+    val = {'corrected': 1, 'internals': emsc_internals_mock, 'emsc': 3}
+    criterion.add(score=0.9, value=val)
     assert not bool(criterion)
     return criterion
 
@@ -32,15 +79,16 @@ def criterion_unfinished(emsc_internals_mock):
 @pytest.fixture()
 def criterion_finished(emsc_internals_mock):
     criterion = TolStopCriterion(3, 0, 0)
-    criterion.add(score=0.9, value=[1, emsc_internals_mock, 3])
-    criterion.add(score=0.5, value=[1, emsc_internals_mock, 3])
-    criterion.add(score=0.6, value=[1, emsc_internals_mock, 3])
+    val = {'corrected': 1, 'internals': emsc_internals_mock, 'emsc': 3}
+    criterion.add(score=0.9, value=val)
+    criterion.add(score=0.5, value=val)
+    criterion.add(score=0.6, value=val)
     assert bool(criterion)
     return criterion
 
 
 def test_me_emsc_internals_only_invalid_criterions(criterion_empty):
-    inn = MeEMSCInternals([criterion_empty, criterion_empty])
+    inn = MeEMSCInternals([criterion_empty, criterion_empty], 2)
     assert inn.coefs.shape == (2,)
     assert np.all(np.isnan(inn.coefs[0]))
     assert np.all(np.isnan(inn.coefs[1]))
@@ -49,7 +97,7 @@ def test_me_emsc_internals_only_invalid_criterions(criterion_empty):
 def test_me_emsc_internals_with_invalid_criterions(
         criterion_empty, criterion_unfinished, criterion_finished):
     inn = MeEMSCInternals(
-        [criterion_empty, criterion_unfinished, criterion_finished])
+        [criterion_empty, criterion_unfinished, criterion_finished], 3)
     assert inn.coefs.shape == (3, 10)
     assert np.all(np.isnan(inn.coefs[0]))
     assert np.all(~np.isnan(inn.coefs[1]))

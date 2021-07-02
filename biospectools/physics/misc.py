@@ -3,8 +3,6 @@ import logging
 import numpy as np
 from scipy.signal import hilbert
 
-from biospectools.physics import van_de_hulst as vdh
-
 
 def get_imagpart(pure_absorbance, wavelength, radius, factor=1):
     """
