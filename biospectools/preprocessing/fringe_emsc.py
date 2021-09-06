@@ -9,6 +9,34 @@ from biospectools.preprocessing.emsc import EMSCInternals
 
 
 class FringeEMSCInternals:
+    """Contains intermediate results of FringeEMSC algorithm.
+
+    Parameters
+    ----------
+    coefs : `(N_samples, 1 + N_constituents + (poly_order + 1) ndarray`
+        All coefficients for each transformed sample. First column is a
+        scaling parameter followed by constituent and polynomial coefs.
+        This is a transposed solution of equation
+        _model @ coefs.T = spectrum.
+    scaling_coefs : `(N_samples,) ndarray`
+        Scaling coefficients (reference to the first column of coefs_).
+    polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
+        Coefficients for each polynomial order.
+    constituents_coefs : `(N_samples, N_constituents) ndarray`
+        Coefficients for each constituent.
+    freqs_coefs: `(N_samples, n_freqs, 2) ndarray`
+        Coefficients for sin and cos components corresponding
+        to frequency in freqs.
+    freqs: `(N_samples, n_freqs) ndarray`
+        List of frequencies sorted by their prominance in fringes.
+    residuals : `(N_samples, K_channels) ndarray`
+         Chemical residuals that were not fitted by EMSC model.
+
+    Raises
+    ------
+    AttributeError
+        When polynomial's or constituents' coeffs are not available.
+    """
     def __init__(self, emsc_internals: List[EMSCInternals], freqs):
         self.freqs = np.array(freqs)
         self._gather_emsc_attributes(emsc_internals)
@@ -58,6 +86,51 @@ class FringeEMSCInternals:
 
 
 class FringeEMSC:
+    """FringeEMSC removes fringe effects from spectra that often
+    occur in thin film samples. To remove fringes, it estimates
+    a frequency of fringes in the given region with FFT and adds
+    sin-cos components to the EMSC model. EMSC model is built
+    individually for each spectrum.
+
+    Parameters
+    ----------
+    reference : `(K_channels,) ndarray`
+        Reference spectrum.
+    wavenumbers: `(K_channels,) ndarray`
+        Wavenumbers must be ordered in ascending or descending order.
+    fringe_wn_location: `Tuple[float, float]`
+        Left and right wavenumbers of region with fringes only,
+        i.e. without absorbance. Longer region will give better
+        estimation for fringes.
+    n_freq: `int`, optional (default 2)
+        Number of frequencies that will be used to fit fringes
+    poly_order : `int`, optional (default 2)
+        Order of polynomial to be used in regression model. If None
+        then polynomial will be not used.
+    weights : `(K_channels,) ndarray`, optional
+        Weights for spectra.
+    constituents : `(N_constituents, K_channels) np.ndarray`, optional
+        Chemical constituents for regression model [2]. Can be used to add
+        orthogonal vectors.
+    scale : `bool`, default True
+        If True then spectra will be scaled to reference spectrum.
+    pad_length_multiplier: `int`, (default 5)
+        Padding for FFT is calculated relatively to the length of
+        fringe region. So padding is len(region) times pad_length_multiplier.
+    double_freq: `bool`, default True
+        Whether to include neighbouring frequence to the model. Usually,
+        the fringes are not exactly sinusoidal, therefore it may make sense
+        to include neighbouring frequence additionally to the main.
+    window_function: `Callable`, (default scipy.signal.windows.bartlett)
+        The window function for FFT transform.
+
+    References
+    ----------
+    .. [1] Solheim J. H. et al. *An automated approach for
+           fringe frequency estimation and removal in infrared
+           spectroscopy and hyperspectral imaging of biological
+           samples.* Journal of Biophotonics: e202100148
+    """
     def __init__(
             self,
             reference,
