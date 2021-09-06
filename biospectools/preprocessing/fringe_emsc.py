@@ -68,7 +68,7 @@ class FringeEMSC:
             weights=None,
             constituents=None,
             scale: bool = True,
-            pad_length_multiplier: float = 5,
+            pad_length_multiplier: int = 5,
             double_freq: bool = True,
             window_function=windows.bartlett
     ):
