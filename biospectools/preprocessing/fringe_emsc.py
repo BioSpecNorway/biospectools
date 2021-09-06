@@ -31,7 +31,7 @@ class FringeEMSCInternals:
         n_freq_coefs = self.freqs.shape[1] * 2
         if emscs[0].constituents_coefs.shape[1] > n_freq_coefs:
             self.constituents_coefs = np.array(
-                [e.constituents_coefs[0, n_freq_coefs*2:] for e in emscs])
+                [e.constituents_coefs[0, n_freq_coefs:] for e in emscs])
 
     def _extract_frequencies(self, emscs: List[EMSCInternals]):
         n = self.freqs.shape[1]
