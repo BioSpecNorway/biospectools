@@ -86,10 +86,10 @@ class FringeEMSCInternals:
 
 
 class FringeEMSC:
-    """FringeEMSC removes fringe effects from spectra that often
+    """FringeEMSC [1]_ removes fringe effects from spectra that often
     occur in thin film samples. To remove fringes, it estimates
     a frequency of fringes in the given region with FFT and adds
-    sin-cos components to the EMSC model. EMSC model is built
+    sin-cos components to the EMSC model. The EMSC model is built
     individually for each spectrum.
 
     Parameters
@@ -99,8 +99,8 @@ class FringeEMSC:
     wavenumbers: `(K_channels,) ndarray`
         Wavenumbers must be ordered in ascending or descending order.
     fringe_wn_location: `Tuple[float, float]`
-        Left and right wavenumbers of region with fringes only,
-        i.e. without absorbance. Longer region will give better
+        Left and right wavenumbers of region with undisturbed fringes,
+        i.e. the silent region. Longer region will give better
         estimation for fringes.
     n_freq: `int`, optional (default 2)
         Number of frequencies that will be used to fit fringes
@@ -108,10 +108,9 @@ class FringeEMSC:
         Order of polynomial to be used in regression model. If None
         then polynomial will be not used.
     weights : `(K_channels,) ndarray`, optional
-        Weights for spectra.
+        Weights of spectra used in the EMSC model.
     constituents : `(N_constituents, K_channels) np.ndarray`, optional
-        Chemical constituents for regression model [2]. Can be used to add
-        orthogonal vectors.
+        Chemical constituents for the ESMC model.
     scale : `bool`, default True
         If True then spectra will be scaled to reference spectrum.
     pad_length_multiplier: `int`, (default 5)
@@ -119,8 +118,9 @@ class FringeEMSC:
         fringe region. So padding is len(region) times pad_length_multiplier.
     double_freq: `bool`, default True
         Whether to include neighbouring frequence to the model. Usually,
-        the fringes are not exactly sinusoidal, therefore it may make sense
-        to include neighbouring frequence additionally to the main.
+        the fringe frequency cannot be retrieved exactly, due to the
+        discrete Fourier domain. Including neighbouring frequencies
+        help mitigate that problem.
     window_function: `Callable`, (default scipy.signal.windows.bartlett)
         The window function for FFT transform.
 
