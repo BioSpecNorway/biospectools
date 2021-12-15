@@ -1,7 +1,6 @@
 from typing import Optional as O
 
 import pytest
-import unittest
 import numpy as np
 from scipy.interpolate import interp1d
 from biospectools.preprocessing.me_emsc import MeEMSC, MeEMSCInternals
@@ -104,186 +103,113 @@ def test_me_emsc_internals_with_invalid_criterions(
     assert np.all(~np.isnan(inn.coefs[2]))
 
 
-class TestME_EMSC(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+@pytest.fixture
+def matlab_reference_spectra():
+    wns, spectrum = np.loadtxt(
+        "data/memsc_test_data/MieStd1_rawSpec.csv",
+        usecols=np.arange(1, 779), delimiter=",")
+    spectra = spectrum[None]
 
-        path2data1 = "data/memsc_test_data/MieStd1_rawSpec.csv"
-        path2data2 = "data/memsc_test_data/MieStd2_refSpec.csv"
-        path2data3 = "data/memsc_test_data/MieStd3_corr.csv"
-        path2data4 = "data/memsc_test_data/MieStd4_param.csv"
-        path2data5 = "data/memsc_test_data/MieStd5_residuals.csv"
-        path2data6 = "data/memsc_test_data/MieStd6_niter.csv"
-        path2data7 = "data/memsc_test_data/MieStd7_RMSE.csv"
-
-        v = np.loadtxt(path2data1, usecols=np.arange(1, 779), delimiter=",")
-        cls.wnS = v[0]
-        cls.Spectra = np.vstack((v[1], v[1]))
-
-        v = np.loadtxt(path2data2, usecols=np.arange(1, 752), delimiter=",")
-        cls.wnM = v[0]
-        cls.Matrigel = v[1].reshape(1, -1)
-        cls.reference = cls.Matrigel
-        cls.wn_ref = cls.wnM
-
-        v = np.loadtxt(path2data3, usecols=np.arange(1, 40), delimiter=",")
-        cls.corr_default_20th_elem = v[0]
-        cls.corr_14ncomp_20th_elem = v[1]
-        cls.corr_fixed_iter3_20th_elem = v[2]
-
-        v = np.loadtxt(path2data4, usecols=np.arange(1, 17), delimiter=",")
-        cls.param_default_20th_elem = v[0][~np.isnan(v[0])]
-        cls.param_14ncomp_20th_elem = v[1]
-        cls.param_fixed_iter3_20th_elem = v[2][~np.isnan(v[2])]
-
-        v = np.loadtxt(path2data5, usecols=np.arange(1, 40), delimiter=",")
-        cls.res_default_20th_elem = v[0]
-        cls.res_14ncomp_20th_elem = v[1]
-        cls.res_fixed_iter3_20th_elem = v[2]
-
-        cls.numiter_std = np.loadtxt(
-            path2data6, usecols=(1,), delimiter=",", dtype="int64"
-        )
-        cls.RMSE_std = np.loadtxt(
-            path2data7, usecols=(1,), delimiter=",", dtype="float"
-        )
-
-        cls.numiter_std = np.array([cls.numiter_std, cls.numiter_std]).T
-        cls.RMSE_std = np.array([cls.RMSE_std, cls.RMSE_std]).T
-
-        cls.reference = at_wavenumbers(cls.wn_ref, cls.wnS, cls.reference)
-        cls.reference = cls.reference[0]
-
-        cls.f1 = MeEMSC(
-            reference=cls.reference,
-            wavenumbers=cls.wnS,
-            weights=None)
-        cls.f1.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
-        cls.f1data, cls.f1inn = cls.f1.transform(cls.Spectra, internals=True)
-        cls.f1_inv = MeEMSC(
-            reference=cls.reference[::-1],
-            wavenumbers=cls.wnS[::-1],
-            weights=None)
-        cls.f1_inv.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
-        cls.f1data_inv, cls.f1inn_inv = cls.f1_inv.transform(
-            cls.Spectra[:, ::-1], internals=True)
-
-        cls.f2 = MeEMSC(
-            reference=cls.reference,
-            wavenumbers=cls.wnS,
-            n_components=14)
-        cls.f2.stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
-        cls.f2data, cls.f2inn = cls.f2.transform(cls.Spectra, internals=True)
-
-        cls.f3 = MeEMSC(
-            reference=cls.reference,
-            wavenumbers=cls.wnS,
-            max_iter=1)
-        cls.f3data, cls.f3inn = cls.f3.transform(cls.Spectra, internals=True)
-
-    def disabled_test_plotting(self):
-        import matplotlib.pyplot as plt
-
-        # Default parameters
-        plt.figure()
-        plt.plot(self.wnS[0::20], self.f1data[0, 0::20].T, label="python")
-        plt.plot(self.wnS[0::20], self.corr_default_20th_elem, label="matlab")
-        plt.plot(
-            self.wnS[0::20],
-            self.f1data[0, 0::20].T[:, 0] - self.corr_default_20th_elem,
-            label="diff",
-        )
-        plt.legend()
-        plt.title("Comparison Matlab/Python - default parameters")
-
-        # 14 principal components
-        plt.figure()
-        plt.plot(self.wnS[0::20], self.f2data[0, 0::20].T, label="python")
-        plt.plot(self.wnS[0::20], self.corr_14ncomp_20th_elem, label="matlab")
-        plt.plot(
-            self.wnS[0::20],
-            self.f2data[0, 0::20].T[:, 0] - self.corr_14ncomp_20th_elem,
-            label="diff",
-        )
-        plt.legend()
-        plt.title("Comparison Matlab/Python - 14 principal components")
-
-        # Fixed iteration number 3
-        plt.figure()
-        plt.plot(self.wnS[0::20], self.f3data[0, 0::20].T, label="python")
-        plt.plot(self.wnS[0::20], self.corr_fixed_iter3_20th_elem, label="matlab")
-        plt.plot(
-            self.wnS[0::20],
-            self.f3data[0, 0::20].T[:, 0] - self.corr_fixed_iter3_20th_elem,
-            label="diff",
-        )
-        plt.legend()
-        plt.title("Comparison Matlab/Python - fixed iterations 3")
-        plt.show()
-
-    def test_correction_output(self):
-        print("Test Correction")
-        np.testing.assert_almost_equal(self.corr_default_20th_elem, self.f1data[0, ::20].T)
-        np.testing.assert_almost_equal(self.corr_default_20th_elem, self.f1data_inv[0, ::-20].T)
-        np.testing.assert_almost_equal(self.corr_14ncomp_20th_elem, self.f2data[0, ::20].T)
-        np.testing.assert_almost_equal(self.corr_fixed_iter3_20th_elem, self.f3data[0, ::20].T)
-
-    def test_EMSC_parameters(self):
-        print("Test Parameters")
-        np.testing.assert_almost_equal(
-            abs(self._matlab_ordered_coefs(self.f1inn)[0]),
-            abs(self.param_default_20th_elem),
-        )
-        np.testing.assert_almost_equal(
-            abs(self._matlab_ordered_coefs(self.f1inn_inv)[0]),
-            abs(self.param_default_20th_elem),
-        )
-        np.testing.assert_almost_equal(
-            abs(self._matlab_ordered_coefs(self.f2inn)[0]),
-            abs(self.param_14ncomp_20th_elem),
-        )
-        np.testing.assert_almost_equal(
-            abs(self._matlab_ordered_coefs(self.f3inn)[0]),
-            abs(self.param_fixed_iter3_20th_elem),
-        )
-
-    def test_number_iterations(self):
-        print("Test Iters")
-        numiter = np.vstack((
-            self.f1inn.n_iterations,
-            self.f2inn.n_iterations,
-            self.f3inn.n_iterations))
-        np.testing.assert_equal(numiter, self.numiter_std)
-
-    def test_RMSE(self):
-        RMSE = np.array([self.f1inn.rmses, self.f2inn.rmses, self.f3inn.rmses])
-        np.testing.assert_equal(np.round(RMSE, decimals=4), self.RMSE_std)
-
-    def test_same_data_reference(self):
-        # it was crashing before
-        f = MeEMSC(reference=self.reference, wavenumbers=self.wnS)
-        _ = f.transform(self.reference[None, :])
-
-        # TODO fix for 1D input array
-
-    def _matlab_ordered_coefs(self, inn: MeEMSCInternals):
-        return np.concatenate((
-            inn.polynomial_coefs,
-            inn.mie_components_coefs,
-            inn.scaling_coefs[:, None]), axis=1)
+    wns_ref, reference = np.loadtxt(
+        "data/memsc_test_data/MieStd2_refSpec.csv",
+        usecols=np.arange(1, 752), delimiter=",")
+    reference = at_wavenumbers(wns_ref, wns, reference.reshape(1, -1))[0]
+    return wns, spectra, reference
 
 
-"""
-    def test_short_reference(self):
-        wnMshort = self.wnM[0::30]
-        Matrigelshort = self.Matrigel[0, 0::30]
-        Matrigelshort = Matrigelshort.reshape(-1, 1).T
-        # it was crashing before
-        f = ME_EMSC(reference=Matrigelshort, wavenumbers=wnMshort)
-        _ = f.transform(self.Spectra)
+@pytest.fixture
+def matlab_results():
+    # to save space saved only 20th wavenumbers values
+    default_spec, ncomp14_spec, fixed_iter3_spec = np.loadtxt(
+        "data/memsc_test_data/MieStd3_corr.csv",
+        usecols=np.arange(1, 40), delimiter=",")
 
-"""
+    default_coefs, ncomp14_coefs, fixed_iter3_coefs = np.loadtxt(
+        "data/memsc_test_data/MieStd4_param.csv",
+        usecols=np.arange(1, 17), delimiter=",")
+    default_coefs = default_coefs[~np.isnan(default_coefs)]
+    fixed_iter3_coefs = fixed_iter3_coefs[~np.isnan(fixed_iter3_coefs)]
 
-if __name__ == "__main__":
-    unittest.main()
+    default_resid, ncomp14_resid, fixed_iter3_resid = np.loadtxt(
+        "data/memsc_test_data/MieStd5_residuals.csv",
+        usecols=np.arange(1, 40), delimiter=",")
+
+    d_niter, n_niter, fixed_niter = np.loadtxt(
+        "data/memsc_test_data/MieStd6_niter.csv",
+        usecols=(1,), delimiter=",", dtype=np.int64)
+    d_rmse, n_rmse, fixed_rmse = np.loadtxt(
+        "data/memsc_test_data/MieStd7_RMSE.csv",
+        usecols=(1,), delimiter=",", dtype=float)
+
+    return {
+        'default': (default_spec, default_coefs, default_resid, d_niter, d_rmse),
+        'ncomp14': (ncomp14_spec, ncomp14_coefs, ncomp14_resid, n_niter, n_rmse),
+        'fixed_iter3': (fixed_iter3_spec, fixed_iter3_coefs, fixed_iter3_resid,
+                        fixed_niter, fixed_rmse),
+    }
+
+
+@pytest.fixture
+def default_result(matlab_reference_spectra, matlab_results):
+    wns, spectra, reference = matlab_reference_spectra
+
+    me_emsc = MeEMSC(reference=reference, wavenumbers=wns)
+    me_emsc.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
+    preproc, internals = me_emsc.transform(spectra, internals=True)
+    return me_emsc, preproc[0, ::20].T, internals
+
+
+@pytest.fixture
+def inverse_wns_result(matlab_reference_spectra, matlab_results):
+    wns, spectra, reference = matlab_reference_spectra
+
+    idxs = np.arange(len(wns))[::-1]
+    me_emsc = MeEMSC(reference=reference[idxs], wavenumbers=wns[idxs])
+    me_emsc.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
+    preproc, internals = me_emsc.transform(spectra[:, idxs], internals=True)
+    unshuffled = preproc[:, idxs]
+    return me_emsc, unshuffled[0, ::20].T, internals
+
+
+@pytest.fixture
+def ncomp14_result(matlab_reference_spectra, matlab_results):
+    wns, spectra, reference = matlab_reference_spectra
+
+    me_emsc = MeEMSC(reference=reference, wavenumbers=wns, n_components=14)
+    me_emsc.stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
+    preproc, internals = me_emsc.transform(spectra, internals=True)
+    return me_emsc, preproc[0, ::20].T, internals
+
+
+@pytest.fixture
+def fixed_iter3_result(matlab_reference_spectra, matlab_results):
+    wns, spectra, reference = matlab_reference_spectra
+
+    me_emsc = MeEMSC(reference=reference, wavenumbers=wns, max_iter=1)
+    preproc, internals = me_emsc.transform(spectra, internals=True)
+    return me_emsc, preproc[0, ::20].T, internals
+
+
+@pytest.mark.parametrize(
+    "python_result,params_set",
+    [
+        ('default_result', 'default'),
+        ('inverse_wns_result', 'default'),
+        ('ncomp14_result', 'ncomp14'),
+        ('fixed_iter3_result', 'fixed_iter3')
+    ])
+def test_compare_with_matlab(python_result, matlab_results, params_set, request):
+    me_emsc, preproc, internals = request.getfixturevalue(python_result)
+    coefs = _matlab_ordered_coefs(internals)[0]
+    gt_spec, gt_coefs, gt_resid, gt_niter, gt_rmse = matlab_results[params_set]
+    np.testing.assert_almost_equal(gt_spec, preproc)
+    np.testing.assert_almost_equal(np.abs(gt_coefs), np.abs(coefs))
+    np.testing.assert_equal(gt_niter, internals.n_iterations)
+    np.testing.assert_equal(gt_rmse, np.round(internals.rmses, decimals=4))
+
+
+def _matlab_ordered_coefs(inn: MeEMSCInternals):
+    return np.concatenate((
+        inn.polynomial_coefs,
+        inn.mie_components_coefs,
+        inn.scaling_coefs[:, None]), axis=1)
