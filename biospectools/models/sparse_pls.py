@@ -139,8 +139,7 @@ class SparsePLSRegression(_pls._PLS):
                  scale=False, max_iter=500, tol=1e-6, copy=True):
         super().__init__(
             n_components, scale=scale, algorithm='svd',
-            deflation_mode="regression", norm_y_weights=False,
-            max_iter=max_iter, tol=tol, copy=copy)
+            deflation_mode="regression", max_iter=max_iter, tol=tol, copy=copy)
 
         if isinstance(sparsity, float):
             self.sparsity = np.full(n_components, sparsity)
