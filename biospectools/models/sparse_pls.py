@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 from scipy.linalg import pinv2
-from sklearn.cross_decomposition import _pls
+from . import _pls
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.utils import check_array, check_consistent_length
 
