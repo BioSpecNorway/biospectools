@@ -87,7 +87,7 @@ def criterion_finished(emsc_internals_mock):
 def test_me_emsc_internals_only_invalid_criterions(criterion_empty):
     inn = MeEMSCInternals(
         [criterion_empty, criterion_empty],
-        n_mie_components=1)
+        n_mie_components=2)
     assert inn.coefs.shape == (2,)
     assert np.all(np.isnan(inn.coefs[0]))
     assert np.all(np.isnan(inn.coefs[1]))
@@ -97,7 +97,7 @@ def test_me_emsc_internals_with_invalid_criterions(
         criterion_empty, criterion_unfinished, criterion_finished):
     inn = MeEMSCInternals(
         [criterion_empty, criterion_unfinished, criterion_finished],
-        n_mie_components=1)
+        n_mie_components=3)
     assert inn.coefs.shape == (3, 10)
     assert np.all(np.isnan(inn.coefs[0]))
     assert np.all(~np.isnan(inn.coefs[1]))
