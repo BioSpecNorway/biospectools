@@ -69,8 +69,7 @@ def emsc_internals_mock():
 @pytest.fixture()
 def criterion_unfinished(emsc_internals_mock):
     criterion = TolStopCriterion(3, 0, 0)
-    val = {'corrected': 1, 'internals': emsc_internals_mock, 'emsc': 3}
-    criterion.add(score=0.9, value=val)
+    criterion.add(score=0.9, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
     assert not bool(criterion)
     return criterion
 
@@ -78,16 +77,17 @@ def criterion_unfinished(emsc_internals_mock):
 @pytest.fixture()
 def criterion_finished(emsc_internals_mock):
     criterion = TolStopCriterion(3, 0, 0)
-    val = {'corrected': 1, 'internals': emsc_internals_mock, 'emsc': 3}
-    criterion.add(score=0.9, value=val)
-    criterion.add(score=0.5, value=val)
-    criterion.add(score=0.6, value=val)
+    criterion.add(score=0.9, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
+    criterion.add(score=0.6, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
+    criterion.add(score=0.6, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
     assert bool(criterion)
     return criterion
 
 
 def test_me_emsc_internals_only_invalid_criterions(criterion_empty):
-    inn = MeEMSCInternals([criterion_empty, criterion_empty], 2)
+    inn = MeEMSCInternals(
+        [criterion_empty, criterion_empty],
+        n_mie_components=1)
     assert inn.coefs.shape == (2,)
     assert np.all(np.isnan(inn.coefs[0]))
     assert np.all(np.isnan(inn.coefs[1]))
@@ -96,7 +96,8 @@ def test_me_emsc_internals_only_invalid_criterions(criterion_empty):
 def test_me_emsc_internals_with_invalid_criterions(
         criterion_empty, criterion_unfinished, criterion_finished):
     inn = MeEMSCInternals(
-        [criterion_empty, criterion_unfinished, criterion_finished], 3)
+        [criterion_empty, criterion_unfinished, criterion_finished],
+        n_mie_components=1)
     assert inn.coefs.shape == (3, 10)
     assert np.all(np.isnan(inn.coefs[0]))
     assert np.all(~np.isnan(inn.coefs[1]))
