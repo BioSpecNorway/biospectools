@@ -4,10 +4,13 @@ import pytest
 import numpy as np
 
 from biospectools.preprocessing import FringeEMSC
-from biospectools.physics import lorentzian
 
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
+
+
+def lorentzian(wn, center, amplitude, width):
+    return amplitude * width**2 / (width**2 + 4*(wn - center)**2)
 
 
 @pytest.fixture
