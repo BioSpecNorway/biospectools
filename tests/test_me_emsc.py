@@ -1,3 +1,4 @@
+import os
 from typing import Optional as O
 
 import pytest
@@ -6,6 +7,9 @@ from scipy.interpolate import interp1d
 from biospectools.preprocessing.me_emsc import MeEMSC, MeEMSCInternals
 from biospectools.preprocessing.criterions import \
     MatlabStopCriterion, TolStopCriterion
+
+
+DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
 
 
 def at_wavenumbers(
@@ -107,12 +111,12 @@ def test_me_emsc_internals_with_invalid_criterions(
 @pytest.fixture
 def matlab_reference_spectra():
     wns, spectrum = np.loadtxt(
-        "data/memsc_test_data/MieStd1_rawSpec.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd1_rawSpec.csv"),
         usecols=np.arange(1, 779), delimiter=",")
     spectra = spectrum[None]
 
     wns_ref, reference = np.loadtxt(
-        "data/memsc_test_data/MieStd2_refSpec.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd2_refSpec.csv"),
         usecols=np.arange(1, 752), delimiter=",")
     reference = at_wavenumbers(wns_ref, wns, reference.reshape(1, -1))[0]
     return wns, spectra, reference
@@ -122,24 +126,24 @@ def matlab_reference_spectra():
 def matlab_results():
     # to save space saved only 20th wavenumbers values
     default_spec, ncomp14_spec, fixed_iter3_spec = np.loadtxt(
-        "data/memsc_test_data/MieStd3_corr.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd3_corr.csv"),
         usecols=np.arange(1, 40), delimiter=",")
 
     default_coefs, ncomp14_coefs, fixed_iter3_coefs = np.loadtxt(
-        "data/memsc_test_data/MieStd4_param.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd4_param.csv"),
         usecols=np.arange(1, 17), delimiter=",")
     default_coefs = default_coefs[~np.isnan(default_coefs)]
     fixed_iter3_coefs = fixed_iter3_coefs[~np.isnan(fixed_iter3_coefs)]
 
     default_resid, ncomp14_resid, fixed_iter3_resid = np.loadtxt(
-        "data/memsc_test_data/MieStd5_residuals.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd5_residuals.csv"),
         usecols=np.arange(1, 40), delimiter=",")
 
     d_niter, n_niter, fixed_niter = np.loadtxt(
-        "data/memsc_test_data/MieStd6_niter.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd6_niter.csv"),
         usecols=(1,), delimiter=",", dtype=np.int64)
     d_rmse, n_rmse, fixed_rmse = np.loadtxt(
-        "data/memsc_test_data/MieStd7_RMSE.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd7_RMSE.csv"),
         usecols=(1,), delimiter=",", dtype=float)
 
     return {
