@@ -11,4 +11,4 @@ try:
         full_name = '{}.{}'.format(__package__, module.__name__.rsplit('.')[-1])
         sys.modules[full_name] = sys.modules[module.__name__]
 except ImportError:
-    logging.exception(f'biospectools_private is not installed')
+    logging.exception('biospectools_private is not installed')

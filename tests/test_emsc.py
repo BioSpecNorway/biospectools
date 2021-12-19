@@ -13,6 +13,7 @@ from biospectools.preprocessing import EMSC
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
 
+
 @pytest.fixture
 def emsc_data():
     return pd.read_excel(
@@ -40,6 +41,7 @@ def emsc_weights_params(emsc_data_params):
 @pytest.fixture
 def wavenumbers():
     return np.linspace(500, 3500, 100)
+
 
 @pytest.fixture
 def norm_wns(wavenumbers):
@@ -99,7 +101,6 @@ class TestEmscFunction:
     def mult_corrected(self, wavenumbers, multiplied_spectra):
         return self.EmscResult(*emsc(
             multiplied_spectra, wavenumbers, return_coefs=True))
-
 
     @pytest.fixture
     def mult_corrected_with_reference(
@@ -199,7 +200,6 @@ class TestEmscFunction:
         assert_array_almost_equal(emsc_weights_params[:, -3], coefs[:, 0])
 
 
-
 class TestEmscClass:
 
     def test_multiplicative_correction(
@@ -266,7 +266,6 @@ class TestEmscClass:
         _, weights_params = emsc(raw_spectra, wns,
                                  weights=weights, return_coefs=True)
 
-
     def test_quartic_correction(self, emsc_data, emsc_quartic_params):
         """
         Test against gold standard: EMSC implementation in Matlab
@@ -327,4 +326,3 @@ class TestEmscClass:
             emsc.rebuild_model = True
             emsc.transform(multiplied_spectra)
             assert mock.call_count == 2
-
