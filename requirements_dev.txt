@@ -3,6 +3,5 @@ pytest-cov==3.0.0
 pandas==1.1.5
 openpyxl==3.0.3
 xlrd==1.2.0
-mypy==0.920
 flake8==4.0.1
 tox==3.24.4
