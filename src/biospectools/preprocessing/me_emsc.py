@@ -182,9 +182,9 @@ class MatlabMieCurvesGenerator:
         return qexts
 
     def _calculate_qext_curves(self, nprs, nkks, wavenumbers):
-        rho = self.alpha0s * (1 + self.gammas*nkks) * wavenumbers
+        rho = self.alpha0s * (1 + self.gammas*nkks) * wavenumbers  # noqa: F841
         tanbeta = nprs / (1 / self.gammas + nkks)
-        beta = np.arctan(tanbeta)
+        beta = np.arctan(tanbeta)  # noqa: F841
         qexts = ne.evaluate(
             '2 - 4 * exp(-rho * tanbeta) * cos(beta) / rho * sin(rho - beta)'
             '- 4 * exp(-rho * tanbeta) * (cos(beta) / rho) ** 2 * cos(rho - 2 * beta)'

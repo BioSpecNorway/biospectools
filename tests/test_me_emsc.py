@@ -1,5 +1,5 @@
 import os
-from typing import Optional as O
+from typing import Optional
 
 import pytest
 import numpy as np
@@ -16,7 +16,7 @@ def at_wavenumbers(
         from_wavenumbers: np.ndarray,
         to_wavenumbers: np.ndarray,
         spectra: np.ndarray,
-        extrapolation_mode: O[str] = None,
+        extrapolation_mode: Optional[str] = None,
         extrapolation_value: int = 0) -> np.ndarray:
     """
     Interpolates spectrum at another wavenumbers
@@ -34,7 +34,8 @@ def at_wavenumbers(
         spectra = spectra[..., ::-1]
     if to_max > from_wavenumbers.max():
         if extrapolation_mode is None:
-            raise ValueError('Range of to_wavenumbers exceeds boundaries of from_wavenumbers')
+            raise ValueError('Range of to_wavenumbers exceeds '
+                             'boundaries of from_wavenumbers')
         from_wavenumbers = np.append(from_wavenumbers, to_max)
         if extrapolation_mode == 'constant':
             spectra = np.append(spectra, [extrapolation_value], axis=-1)
@@ -44,7 +45,8 @@ def at_wavenumbers(
             raise ValueError(f'Unknown extrapolation_mode {extrapolation_mode}')
     if to_min < from_wavenumbers.min():
         if extrapolation_mode is None:
-            raise ValueError('Range of to_wavenumbers exceeds boundaries of from_wavenumbers')
+            raise ValueError('Range of to_wavenumbers exceeds '
+                             'boundaries of from_wavenumbers')
         from_wavenumbers = np.insert(from_wavenumbers, 0, to_min)
         if extrapolation_mode == 'constant':
             spectra = np.insert(spectra, 0, [extrapolation_value], axis=-1)
@@ -73,7 +75,8 @@ def emsc_internals_mock():
 @pytest.fixture()
 def criterion_unfinished(emsc_internals_mock):
     criterion = TolStopCriterion(3, 0, 0)
-    criterion.add(score=0.9, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
+    v = {'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None}
+    criterion.add(score=0.9, value=v)
     assert not bool(criterion)
     return criterion
 
@@ -81,9 +84,10 @@ def criterion_unfinished(emsc_internals_mock):
 @pytest.fixture()
 def criterion_finished(emsc_internals_mock):
     criterion = TolStopCriterion(3, 0, 0)
-    criterion.add(score=0.9, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
-    criterion.add(score=0.6, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
-    criterion.add(score=0.6, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
+    v = {'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None}
+    criterion.add(score=0.9, value=v)
+    criterion.add(score=0.6, value=v)
+    criterion.add(score=0.6, value=v)
     assert bool(criterion)
     return criterion
 
@@ -147,8 +151,10 @@ def matlab_results():
         usecols=(1,), delimiter=",", dtype=float)
 
     return {
-        'default': (default_spec, default_coefs, default_resid, d_niter, d_rmse),
-        'ncomp14': (ncomp14_spec, ncomp14_coefs, ncomp14_resid, n_niter, n_rmse),
+        'default': (default_spec, default_coefs, default_resid,
+                    d_niter, d_rmse),
+        'ncomp14': (ncomp14_spec, ncomp14_coefs, ncomp14_resid,
+                    n_niter, n_rmse),
         'fixed_iter3': (fixed_iter3_spec, fixed_iter3_coefs, fixed_iter3_resid,
                         fixed_niter, fixed_rmse),
     }
@@ -203,7 +209,8 @@ def fixed_iter3_result(matlab_reference_spectra, matlab_results):
         ('ncomp14_result', 'ncomp14'),
         ('fixed_iter3_result', 'fixed_iter3')
     ])
-def test_compare_with_matlab(python_result, matlab_results, params_set, request):
+def test_compare_with_matlab(
+        python_result, matlab_results, params_set, request):
     me_emsc, preproc, internals = request.getfixturevalue(python_result)
     coefs = _matlab_ordered_coefs(internals)[0]
     gt_spec, gt_coefs, gt_resid, gt_niter, gt_rmse = matlab_results[params_set]

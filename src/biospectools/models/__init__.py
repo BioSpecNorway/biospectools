@@ -1,1 +1,1 @@
-from .sparse_pls import SparsePLSRegression
+from .sparse_pls import SparsePLSRegression  # noqa: F401

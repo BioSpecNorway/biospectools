@@ -1,5 +1,5 @@
 import logging
-from typing import Union as U, Tuple as T, Optional as O
+from typing import Union as U, Tuple as T, Optional
 
 import numpy as np
 
@@ -33,8 +33,8 @@ class EMSCInternals:
             self,
             coefs: np.ndarray,
             residuals: np.ndarray,
-            poly_order: O[int],
-            constituents: O[np.ndarray]):
+            poly_order: Optional[int],
+            constituents: Optional[np.ndarray]):
         assert len(coefs.T) == len(residuals), 'Inconsistent number of spectra'
 
         self.coefs = coefs.T
@@ -117,7 +117,7 @@ class EMSC:
             self,
             reference,
             wavenumbers=None,
-            poly_order: O[int] = 2,
+            poly_order: Optional[int] = 2,
             constituents=None,
             weights=None,
             scale: bool = True,
@@ -227,7 +227,7 @@ class EMSC:
 def emsc(
         spectra: np.ndarray,
         wavenumbers: np.ndarray,
-        poly_order: O[int] = 2,
+        poly_order: Optional[int] = 2,
         reference: np.ndarray = None,
         weights: np.ndarray = None,
         constituents: np.ndarray = None,
