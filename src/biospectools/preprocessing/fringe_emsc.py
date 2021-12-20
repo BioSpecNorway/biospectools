@@ -197,7 +197,7 @@ class FringeEMSC:
 
         if self.double_freq:
             ft = f_transform
-            #FIXME: out of bounds?
+            # FIXME: out of bounds?
             neighbors = [i + 1 if ft[i + 1] > ft[i - 1] else i - 1
                          for i in freq_idxs]
             freq_idxs = np.concatenate((freq_idxs, neighbors))

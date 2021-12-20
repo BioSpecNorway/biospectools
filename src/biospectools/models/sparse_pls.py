@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 from scipy.linalg import pinv2
-from sklearn.cross_decomposition import _pls
+from . import _pls
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.utils import check_array, check_consistent_length
 
@@ -139,8 +139,7 @@ class SparsePLSRegression(_pls._PLS):
                  scale=False, max_iter=500, tol=1e-6, copy=True):
         super().__init__(
             n_components, scale=scale, algorithm='svd',
-            deflation_mode="regression", norm_y_weights=False,
-            max_iter=max_iter, tol=tol, copy=copy)
+            deflation_mode="regression", max_iter=max_iter, tol=tol, copy=copy)
 
         if isinstance(sparsity, float):
             self.sparsity = np.full(n_components, sparsity)

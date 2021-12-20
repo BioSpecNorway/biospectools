@@ -1,11 +1,13 @@
 import os
-DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
 
 from numpy.testing import assert_array_almost_equal
 from scipy import io
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
 from biospectools.models import SparsePLSRegression
+
+
+DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
 
 
 def test_sparse_pls():

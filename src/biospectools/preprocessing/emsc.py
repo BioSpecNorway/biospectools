@@ -1,5 +1,5 @@
 import logging
-from typing import Union as U, Tuple as T, Optional as O
+from typing import Union as U, Tuple as T, Optional
 
 import numpy as np
 
@@ -33,8 +33,8 @@ class EMSCInternals:
             self,
             coefs: np.ndarray,
             residuals: np.ndarray,
-            poly_order: O[int],
-            constituents: O[np.ndarray]):
+            poly_order: Optional[int],
+            constituents: Optional[np.ndarray]):
         assert len(coefs.T) == len(residuals), 'Inconsistent number of spectra'
 
         self.coefs = coefs.T
@@ -85,7 +85,7 @@ class EMSC:
     weights : `(K_channels,) ndarray`, optional
         Weights for spectra.
     constituents : `(N_constituents, K_channels) np.ndarray`, optional
-        Chemical constituents for regression model [2]. Can be used to add
+        Chemical constituents for regression model [2]_. Can be used to add
         orthogonal vectors.
     scale : `bool`, default True
         If True then spectra will be scaled to reference spectrum.
@@ -117,7 +117,7 @@ class EMSC:
             self,
             reference,
             wavenumbers=None,
-            poly_order: O[int] = 2,
+            poly_order: Optional[int] = 2,
             constituents=None,
             weights=None,
             scale: bool = True,
@@ -227,7 +227,7 @@ class EMSC:
 def emsc(
         spectra: np.ndarray,
         wavenumbers: np.ndarray,
-        poly_order: O[int] = 2,
+        poly_order: Optional[int] = 2,
         reference: np.ndarray = None,
         weights: np.ndarray = None,
         constituents: np.ndarray = None,

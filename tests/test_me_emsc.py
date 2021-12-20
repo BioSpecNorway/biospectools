@@ -1,4 +1,5 @@
-from typing import Optional as O
+import os
+from typing import Optional
 
 import pytest
 import numpy as np
@@ -8,11 +9,14 @@ from biospectools.preprocessing.criterions import \
     MatlabStopCriterion, TolStopCriterion
 
 
+DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
+
+
 def at_wavenumbers(
         from_wavenumbers: np.ndarray,
         to_wavenumbers: np.ndarray,
         spectra: np.ndarray,
-        extrapolation_mode: O[str] = None,
+        extrapolation_mode: Optional[str] = None,
         extrapolation_value: int = 0) -> np.ndarray:
     """
     Interpolates spectrum at another wavenumbers
@@ -30,7 +34,8 @@ def at_wavenumbers(
         spectra = spectra[..., ::-1]
     if to_max > from_wavenumbers.max():
         if extrapolation_mode is None:
-            raise ValueError('Range of to_wavenumbers exceeds boundaries of from_wavenumbers')
+            raise ValueError('Range of to_wavenumbers exceeds '
+                             'boundaries of from_wavenumbers')
         from_wavenumbers = np.append(from_wavenumbers, to_max)
         if extrapolation_mode == 'constant':
             spectra = np.append(spectra, [extrapolation_value], axis=-1)
@@ -40,7 +45,8 @@ def at_wavenumbers(
             raise ValueError(f'Unknown extrapolation_mode {extrapolation_mode}')
     if to_min < from_wavenumbers.min():
         if extrapolation_mode is None:
-            raise ValueError('Range of to_wavenumbers exceeds boundaries of from_wavenumbers')
+            raise ValueError('Range of to_wavenumbers exceeds '
+                             'boundaries of from_wavenumbers')
         from_wavenumbers = np.insert(from_wavenumbers, 0, to_min)
         if extrapolation_mode == 'constant':
             spectra = np.insert(spectra, 0, [extrapolation_value], axis=-1)
@@ -69,7 +75,8 @@ def emsc_internals_mock():
 @pytest.fixture()
 def criterion_unfinished(emsc_internals_mock):
     criterion = TolStopCriterion(3, 0, 0)
-    criterion.add(score=0.9, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
+    v = {'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None}
+    criterion.add(score=0.9, value=v)
     assert not bool(criterion)
     return criterion
 
@@ -77,9 +84,10 @@ def criterion_unfinished(emsc_internals_mock):
 @pytest.fixture()
 def criterion_finished(emsc_internals_mock):
     criterion = TolStopCriterion(3, 0, 0)
-    criterion.add(score=0.9, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
-    criterion.add(score=0.6, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
-    criterion.add(score=0.6, value={'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None})
+    v = {'corrected': 1, 'internals': emsc_internals_mock, 'emsc': None}
+    criterion.add(score=0.9, value=v)
+    criterion.add(score=0.6, value=v)
+    criterion.add(score=0.6, value=v)
     assert bool(criterion)
     return criterion
 
@@ -107,12 +115,12 @@ def test_me_emsc_internals_with_invalid_criterions(
 @pytest.fixture
 def matlab_reference_spectra():
     wns, spectrum = np.loadtxt(
-        "data/memsc_test_data/MieStd1_rawSpec.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd1_rawSpec.csv"),
         usecols=np.arange(1, 779), delimiter=",")
     spectra = spectrum[None]
 
     wns_ref, reference = np.loadtxt(
-        "data/memsc_test_data/MieStd2_refSpec.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd2_refSpec.csv"),
         usecols=np.arange(1, 752), delimiter=",")
     reference = at_wavenumbers(wns_ref, wns, reference.reshape(1, -1))[0]
     return wns, spectra, reference
@@ -122,29 +130,31 @@ def matlab_reference_spectra():
 def matlab_results():
     # to save space saved only 20th wavenumbers values
     default_spec, ncomp14_spec, fixed_iter3_spec = np.loadtxt(
-        "data/memsc_test_data/MieStd3_corr.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd3_corr.csv"),
         usecols=np.arange(1, 40), delimiter=",")
 
     default_coefs, ncomp14_coefs, fixed_iter3_coefs = np.loadtxt(
-        "data/memsc_test_data/MieStd4_param.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd4_param.csv"),
         usecols=np.arange(1, 17), delimiter=",")
     default_coefs = default_coefs[~np.isnan(default_coefs)]
     fixed_iter3_coefs = fixed_iter3_coefs[~np.isnan(fixed_iter3_coefs)]
 
     default_resid, ncomp14_resid, fixed_iter3_resid = np.loadtxt(
-        "data/memsc_test_data/MieStd5_residuals.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd5_residuals.csv"),
         usecols=np.arange(1, 40), delimiter=",")
 
     d_niter, n_niter, fixed_niter = np.loadtxt(
-        "data/memsc_test_data/MieStd6_niter.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd6_niter.csv"),
         usecols=(1,), delimiter=",", dtype=np.int64)
     d_rmse, n_rmse, fixed_rmse = np.loadtxt(
-        "data/memsc_test_data/MieStd7_RMSE.csv",
+        os.path.join(DATA_PATH, "memsc_test_data/MieStd7_RMSE.csv"),
         usecols=(1,), delimiter=",", dtype=float)
 
     return {
-        'default': (default_spec, default_coefs, default_resid, d_niter, d_rmse),
-        'ncomp14': (ncomp14_spec, ncomp14_coefs, ncomp14_resid, n_niter, n_rmse),
+        'default': (default_spec, default_coefs, default_resid,
+                    d_niter, d_rmse),
+        'ncomp14': (ncomp14_spec, ncomp14_coefs, ncomp14_resid,
+                    n_niter, n_rmse),
         'fixed_iter3': (fixed_iter3_spec, fixed_iter3_coefs, fixed_iter3_resid,
                         fixed_niter, fixed_rmse),
     }
@@ -199,7 +209,8 @@ def fixed_iter3_result(matlab_reference_spectra, matlab_results):
         ('ncomp14_result', 'ncomp14'),
         ('fixed_iter3_result', 'fixed_iter3')
     ])
-def test_compare_with_matlab(python_result, matlab_results, params_set, request):
+def test_compare_with_matlab(
+        python_result, matlab_results, params_set, request):
     me_emsc, preproc, internals = request.getfixturevalue(python_result)
     coefs = _matlab_ordered_coefs(internals)[0]
     gt_spec, gt_coefs, gt_resid, gt_niter, gt_rmse = matlab_results[params_set]
