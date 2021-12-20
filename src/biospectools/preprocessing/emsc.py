@@ -85,7 +85,7 @@ class EMSC:
     weights : `(K_channels,) ndarray`, optional
         Weights for spectra.
     constituents : `(N_constituents, K_channels) np.ndarray`, optional
-        Chemical constituents for regression model [2]. Can be used to add
+        Chemical constituents for regression model [2]_. Can be used to add
         orthogonal vectors.
     scale : `bool`, default True
         If True then spectra will be scaled to reference spectrum.
