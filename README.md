@@ -1,3 +1,5 @@
+[![Tests](https://github.com/BioSpecNorway/biospectools/actions/workflows/tests.yml/badge.svg)](https://github.com/BioSpecNorway/biospectools/actions/workflows/tests.yml)
+[![docs](https://readthedocs.org/projects/biospectools/badge/?version=stable)](https://biospectools.readthedocs.io/en/stable/?badge=stable)
 # Biospectools
 
 ## Get started with biospectools
