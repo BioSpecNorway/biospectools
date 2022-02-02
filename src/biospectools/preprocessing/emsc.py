@@ -221,7 +221,8 @@ class EMSC:
         if self.wavenumbers is None:
             return None
         half_rng = np.abs(self.wavenumbers[0] - self.wavenumbers[-1]) / 2
-        return (self.wavenumbers - np.mean(self.wavenumbers)) / half_rng
+        mid_point = (self.wavenumbers.min() + self.wavenumbers.max()) / 2
+        return (self.wavenumbers - mid_point) / half_rng
 
 
 def emsc(
@@ -320,4 +321,5 @@ def emsc(
 
 def _normalize_wavenumbers(wns: np.ndarray):
     half_rng = np.abs(wns[0] - wns[-1]) / 2
-    return (wns - np.mean(wns)) / half_rng
+    mid_point = (wns.min() + wns.max()) / 2
+    return (wns - mid_point) / half_rng
