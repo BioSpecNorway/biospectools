@@ -46,7 +46,8 @@ def wavenumbers():
 @pytest.fixture
 def norm_wns(wavenumbers):
     half_rng = np.abs(wavenumbers[0] - wavenumbers[-1]) / 2
-    return (wavenumbers - np.mean(wavenumbers)) / half_rng
+    mid_point = (wavenumbers.min() + wavenumbers.max()) / 2
+    return (wavenumbers - mid_point) / half_rng
 
 
 @pytest.fixture
