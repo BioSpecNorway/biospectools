@@ -6,6 +6,7 @@ from scipy.signal import windows
 
 from biospectools.preprocessing import EMSC
 from biospectools.preprocessing.emsc import EMSCInternals
+from biospectools.utils.deprecated import deprecated_alias
 
 
 class FringeEMSCInternals:
@@ -22,7 +23,7 @@ class FringeEMSCInternals:
         Scaling coefficients (reference to the first column of coefs_).
     polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
         Coefficients for each polynomial order.
-    constituents_coefs : `(N_samples, N_constituents) ndarray`
+    interferents_coefs : `(N_samples, N_interferents) ndarray`
         Coefficients for each constituent.
     freqs_coefs: `(N_samples, n_freqs, 2) ndarray`
         Coefficients for sin and cos components corresponding
@@ -35,7 +36,7 @@ class FringeEMSCInternals:
     Raises
     ------
     AttributeError
-        When polynomial's or constituents' coeffs are not available.
+        When polynomial's or interferents' coeffs are not available.
     """
     def __init__(self, emsc_internals: List[EMSCInternals], freqs):
         self.freqs = np.array(freqs)
@@ -57,14 +58,14 @@ class FringeEMSCInternals:
         self.freqs_coefs = self._extract_frequencies(emscs)
 
         n_freq_coefs = self.freqs.shape[1] * 2
-        if emscs[0].constituents_coefs.shape[1] > n_freq_coefs:
-            self.constituents_coefs = np.array(
-                [e.constituents_coefs[0, n_freq_coefs:] for e in emscs])
+        if emscs[0].interferents_coefs.shape[1] > n_freq_coefs:
+            self.interferents_coefs = np.array(
+                [e.interferents_coefs[0, n_freq_coefs:] for e in emscs])
 
     def _extract_frequencies(self, emscs: List[EMSCInternals]):
         n = self.freqs.shape[1]
         # each freq has sine and cosine component
-        freq_coefs = np.array([e.constituents_coefs[0, :n * 2] for e in emscs])
+        freq_coefs = np.array([e.interferents_coefs[0, :n * 2] for e in emscs])
         return freq_coefs.reshape((-1, n, 2))
 
     def _sort_freqs_by_contribution(self):
@@ -109,8 +110,8 @@ class FringeEMSC:
         then polynomial will be not used.
     weights : `(K_channels,) ndarray`, optional
         Weights of spectra used in the EMSC model.
-    constituents : `(N_constituents, K_channels) np.ndarray`, optional
-        Chemical constituents for the ESMC model.
+    interferents : `(N_interferents, K_channels) np.ndarray`, optional
+        Chemical interferents for the ESMC model.
     scale : `bool`, default True
         If True then spectra will be scaled to reference spectrum.
     pad_length_multiplier: `int`, (default 5)
@@ -131,6 +132,7 @@ class FringeEMSC:
            spectroscopy and hyperspectral imaging of biological
            samples.* Journal of Biophotonics: e202100148
     """
+    @deprecated_alias(constituents='interferents')
     def __init__(
             self,
             reference,
@@ -139,7 +141,7 @@ class FringeEMSC:
             n_freq: int = 2,
             poly_order: int = 2,
             weights=None,
-            constituents=None,
+            interferents=None,
             scale: bool = True,
             pad_length_multiplier: int = 5,
             double_freq: bool = True,
@@ -151,7 +153,7 @@ class FringeEMSC:
         self.n_freq = n_freq
         self.poly_order = poly_order
         self.weights = weights
-        self.constituents = constituents
+        self.interferents = interferents
         self.scale = scale
         self.pad_length_multiplier = pad_length_multiplier
         self.double_freq = double_freq
@@ -216,13 +218,13 @@ class FringeEMSC:
         fringe_comps = np.array([sin_then_cos(freq * self.wavenumbers)
                                  for freq in freqs
                                  for sin_then_cos in [np.sin, np.cos]])
-        if self.constituents is not None:
-            constituents = np.concatenate((fringe_comps, self.constituents))
+        if self.interferents is not None:
+            interferents = np.concatenate((fringe_comps, self.interferents))
         else:
-            constituents = fringe_comps
+            interferents = fringe_comps
         emsc = EMSC(
             self.reference, self.wavenumbers, self.poly_order,
-            constituents, self.weights, self.scale)
+            interferents, self.weights, self.scale)
         return emsc
 
     def _padded_region_length(self, region):

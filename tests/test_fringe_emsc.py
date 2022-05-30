@@ -53,7 +53,7 @@ def test_fring_emsc(
         spectrum_with_fringe, freqs, amps):
     fringe_emsc = FringeEMSC(
         pure_spectrum, wavenumbers, fringe_wn_location=(1724, 1924),
-        constituents=constituent[None],
+        interferents=constituent[None],
         n_freq=2, double_freq=True)
     corrected, inn = fringe_emsc.transform(
         spectrum_with_fringe[None], internals=True)
@@ -65,12 +65,12 @@ def test_fring_emsc(
     np.testing.assert_almost_equal(inn.freqs_coefs[0, :2], amps)
     np.testing.assert_almost_equal(inn.freqs_coefs[0, 2:], 0)
     np.testing.assert_almost_equal(inn.scaling_coefs[0], 0.1)
-    np.testing.assert_almost_equal(inn.constituents_coefs[0, 0], 3)
+    np.testing.assert_almost_equal(inn.interferents_coefs[0, 0], 3)
 
     coefs = np.concatenate((
         inn.scaling_coefs[:, None],
         inn.freqs_coefs.reshape(1, -1),
-        inn.constituents_coefs,
+        inn.interferents_coefs,
         inn.polynomial_coefs
     ), axis=1)
     np.testing.assert_almost_equal(inn.coefs, coefs)

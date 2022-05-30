@@ -1,7 +1,10 @@
 import logging
+import warnings
 from typing import Union as U, Tuple as T, Optional
 
 import numpy as np
+
+from biospectools.utils.deprecated import deprecated_alias
 
 
 class EMSCInternals:
@@ -9,7 +12,7 @@ class EMSCInternals:
 
     Parameters
     ----------
-    coefs : `(N_samples, 1 + N_constituents + (poly_order + 1) ndarray`
+    coefs : `(N_samples, 1 + N_interferents + (poly_order + 1) ndarray`
         All coefficients for each transformed sample. First column is a
         scaling parameter followed by constituent and polynomial coefs.
         This is a transposed solution of equation
@@ -18,7 +21,7 @@ class EMSCInternals:
         Scaling coefficients (reference to the first column of coefs_).
     polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
         Coefficients for each polynomial order.
-    constituents_coefs : `(N_samples, N_constituents) ndarray`
+    interferents_coefs : `(N_samples, N_interferents) ndarray`
         Coefficients for each constituent.
     residuals : `(N_samples, K_channels) ndarray`
          Chemical residuals that were not fitted by EMSC model.
@@ -26,7 +29,7 @@ class EMSCInternals:
     Raises
     ------
     AttributeError
-        When polynomial's or constituents' coeffs are not available.
+        When polynomial's or interferents' coeffs are not available.
     """
 
     def __init__(
@@ -34,15 +37,15 @@ class EMSCInternals:
             coefs: np.ndarray,
             residuals: np.ndarray,
             poly_order: Optional[int],
-            constituents: Optional[np.ndarray]):
+            interferents: Optional[np.ndarray]):
         assert len(coefs.T) == len(residuals), 'Inconsistent number of spectra'
 
         self.coefs = coefs.T
         self.residuals = residuals
-        if constituents is not None:
-            self._n_constituents = len(constituents)
+        if interferents is not None:
+            self._n_interfs = len(interferents)
         else:
-            self._n_constituents = 0
+            self._n_interfs = 0
         if poly_order is not None:
             self._n_polynomials = poly_order
         else:
@@ -53,12 +56,18 @@ class EMSCInternals:
         return self.coefs[:, 0]
 
     @property
-    def constituents_coefs(self) -> np.ndarray:
-        if self._n_constituents == 0:
+    def interferents_coefs(self) -> np.ndarray:
+        if self._n_interfs == 0:
             raise AttributeError(
-                'constituents were not set up. '
+                'interferents were not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, 1:1 + self._n_constituents]
+        return self.coefs[:, 1:1 + self._n_interfs]
+
+    @property
+    def constituents_coefs(self) -> np.ndarray:
+        warnings.warn('interferents is deprecated; use interferents',
+                      DeprecationWarning, stacklevel=3)
+        return self.interferents_coefs
 
     @property
     def polynomial_coefs(self) -> np.ndarray:
@@ -66,7 +75,7 @@ class EMSCInternals:
             raise AttributeError(
                 'poly_order was not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, 1 + self._n_constituents:]
+        return self.coefs[:, 1 + self._n_interfs:]
 
 
 class EMSC:
@@ -84,8 +93,8 @@ class EMSC:
         then polynomial will be not used.
     weights : `(K_channels,) ndarray`, optional
         Weights for spectra.
-    constituents : `(N_constituents, K_channels) np.ndarray`, optional
-        Chemical constituents for regression model [2]_. Can be used to add
+    interferents : `(N_interferents, K_channels) np.ndarray`, optional
+        Chemical interferents for regression model [2]_. Can be used to add
         orthogonal vectors.
     scale : `bool`, default True
         If True then spectra will be scaled to reference spectrum.
@@ -98,7 +107,7 @@ class EMSC:
     ----------------
     _model : `(K_channels, 1 + N_constituents + (poly_order + 1) ndarray`
         Matrix that is used to solve least squares. First column is a
-        reference spectrum followed by constituents and polynomial columns.
+        reference spectrum followed by interferents and polynomial columns.
     _norm_wns : `(K_channels,) ndarray`
         Normalized wavenumbers to -1, 1 range
 
@@ -113,12 +122,13 @@ class EMSC:
     """
 
     # TODO: Add numpy typing for array-like objects?
+    @deprecated_alias(constituents='interferents')
     def __init__(
             self,
             reference,
             wavenumbers=None,
             poly_order: Optional[int] = 2,
-            constituents=None,
+            interferents=None,
             weights=None,
             scale: bool = True,
             rebuild_model: bool = True,
@@ -131,9 +141,9 @@ class EMSC:
         self.weights = weights
         if self.weights is not None:
             self.weights = np.asarray(weights)
-        self.constituents = constituents
-        if self.constituents is not None:
-            self.constituents = np.asarray(constituents)
+        self.interferents = interferents
+        if self.interferents is not None:
+            self.interferents = np.asarray(interferents)
         self.scale = scale
         self.rebuild_model = rebuild_model
 
@@ -167,7 +177,7 @@ class EMSC:
 
         if internals:
             internals_ = EMSCInternals(
-                coefs, residuals, self.poly_order, self.constituents)
+                coefs, residuals, self.poly_order, self.interferents)
             return corr, internals_
         return corr
 
@@ -177,8 +187,8 @@ class EMSC:
 
     def _build_model(self):
         columns = [self.reference]
-        if self.constituents is not None:
-            columns.extend(self.constituents)
+        if self.interferents is not None:
+            columns.extend(self.interferents)
         if self.poly_order is not None:
             columns.append(np.ones_like(self.reference))
             if self.poly_order > 0:
@@ -225,13 +235,14 @@ class EMSC:
         return (self.wavenumbers - mid_point) / half_rng
 
 
+@deprecated_alias(constituents='interferents')
 def emsc(
         spectra: np.ndarray,
         wavenumbers: np.ndarray,
         poly_order: Optional[int] = 2,
         reference: np.ndarray = None,
         weights: np.ndarray = None,
-        constituents: np.ndarray = None,
+        interferents: np.ndarray = None,
         return_coefs: bool = False,
         return_residuals: bool = False) -> U[np.ndarray, T[np.ndarray, np.ndarray],
                                              T[np.ndarray, np.ndarray, np.ndarray]]:
@@ -250,8 +261,8 @@ def emsc(
         Reference spectrum. If None, then average will be computed.
     weights : `(K_channels,) ndarray`, optional
         Weights for spectra.
-    constituents : `(N_constituents, K_channels) np.ndarray`, optional
-        Chemical constituents for regression model [2]. Can be used to add
+    interferents : `(N_interferents, K_channels) np.ndarray`, optional
+        Chemical interferents for regression model [2]. Can be used to add
         orthogonal vectors.
     return_coefs : `bool`, optional
         Return coefficients.
@@ -261,11 +272,11 @@ def emsc(
     Returns
     -------
     preprocessed_spectra : `(N_samples, K_channels) ndarray`
-    coefficients : `(N_samples, 1 + N_constituents + (poly_order + 1) ndarray`, optional
+    coefficients : `(N_samples, 1 + N_interferents + (poly_order + 1) ndarray`, optional
         If ``return_coefs`` is true, then returns coefficients in the
         following order:
         #. Scaling parametes, b (related to reference spectrum)
-        #. All constituents parameters in the same order as they given
+        #. All interferents parameters in the same order as they given
         #. Polynomial coefficients (slope, quadratic effect and so on)
     residuals: `(N_samples, K_channels) ndarray`, optional
         If ``return_residuals`` is true, then returns residuals
@@ -288,8 +299,8 @@ def emsc(
     # solve for coefs: X @ coefs = spectrum (column)
     # (1) build matrix X = [reference constituents polynomial]
     columns = [reference]
-    if constituents is not None:
-        columns.extend(constituents)
+    if interferents is not None:
+        columns.extend(interferents)
     if poly_order is not None:
         norm_wns = _normalize_wavenumbers(wavenumbers)
         columns.append(np.ones_like(norm_wns))

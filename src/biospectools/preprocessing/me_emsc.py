@@ -148,7 +148,7 @@ class MeEMSC:
         qexts = self._orthogonalize(qexts, reference)
         components = self.mie_decomposer.find_orthogonal_components(qexts)
 
-        emsc = EMSC(reference, poly_order=0, constituents=components)
+        emsc = EMSC(reference, poly_order=0, interferents=components)
         return emsc
 
     def _orthogonalize(self, qext: np.ndarray, reference: np.ndarray):
