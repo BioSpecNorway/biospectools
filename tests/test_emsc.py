@@ -253,6 +253,22 @@ class TestEmscClass:
         with pytest.raises(AttributeError):
             inn.polynomial_coefs
 
+    def test_analytes(
+            self, wavenumbers, base_spectrum,
+            spectra_with_constituent, constituent,
+            spectra, constituent_coefs):
+        emsc = EMSC(base_spectrum, wavenumbers,
+                    poly_order=None, analytes=constituent[None])
+        corrected, inn = emsc.transform(
+            spectra_with_constituent, internals=True)
+
+        assert_array_almost_equal(corrected, spectra_with_constituent)
+        assert_array_almost_equal(
+            inn.analytes_coefs[:, 0], constituent_coefs[:, 0])
+        assert_array_almost_equal(inn.coefs[:, 1], constituent_coefs[:, 0])
+        with pytest.raises(AttributeError):
+            inn.polynomial_coefs
+
     def test_emsc_parameters(self, emsc_data, emsc_quartic_params):
         """
         Test against gold standard: EMSC implementation in Matlab

@@ -12,7 +12,7 @@ class EMSCInternals:
 
     Parameters
     ----------
-    coefs : `(N_samples, 1 + N_interferents + (poly_order + 1) ndarray`
+    coefs : `(N_samples, 1 + N_interferents + N_analytes + (poly_order + 1) ndarray`
         All coefficients for each transformed sample. First column is a
         scaling parameter followed by constituent and polynomial coefs.
         This is a transposed solution of equation
@@ -22,7 +22,9 @@ class EMSCInternals:
     polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
         Coefficients for each polynomial order.
     interferents_coefs : `(N_samples, N_interferents) ndarray`
-        Coefficients for each constituent.
+        Coefficients for each interferent.
+    analytes_coefs : `(N_samples, N_analytes) ndarray`
+        Coefficients for each analyte.
     residuals : `(N_samples, K_channels) ndarray`
          Chemical residuals that were not fitted by EMSC model.
 
@@ -37,19 +39,27 @@ class EMSCInternals:
             coefs: np.ndarray,
             residuals: np.ndarray,
             poly_order: Optional[int],
-            interferents: Optional[np.ndarray]):
+            interferents: Optional[np.ndarray],
+            analytes: Optional[np.ndarray]):
         assert len(coefs.T) == len(residuals), 'Inconsistent number of spectra'
 
         self.coefs = coefs.T
         self.residuals = residuals
-        if interferents is not None:
-            self._n_interfs = len(interferents)
-        else:
-            self._n_interfs = 0
-        if poly_order is not None:
-            self._n_polynomials = poly_order
-        else:
-            self._n_polynomials = 0
+
+        if interferents is None:
+            interferents = []
+        if analytes is None:
+            analytes = []
+        if poly_order is None:
+            poly_order = -1
+
+        idxes = [0, 1]
+        idxes.append(idxes[-1] + len(interferents))
+        idxes.append(idxes[-1] + len(analytes))
+        idxes.append(idxes[-1] + poly_order + 1)
+        names = ['scaling', 'interferents', 'analytes', 'polynomials']
+        self.slices = {n: slice(st, fi)
+                       for n, st, fi in zip(names, idxes[:-1], idxes[1:])}
 
     @property
     def scaling_coefs(self) -> np.ndarray:
@@ -57,11 +67,21 @@ class EMSCInternals:
 
     @property
     def interferents_coefs(self) -> np.ndarray:
-        if self._n_interfs == 0:
+        slc = self.slices['interferents']
+        if slc.start == slc.stop:
             raise AttributeError(
                 'interferents were not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, 1:1 + self._n_interfs]
+        return self.coefs[:, slc]
+
+    @property
+    def analytes_coefs(self) -> np.ndarray:
+        slc = self.slices['analytes']
+        if slc.start == slc.stop:
+            raise AttributeError(
+                'analytes were not set up. '
+                'Did you forget to call transform?')
+        return self.coefs[:, slc]
 
     @property
     def constituents_coefs(self) -> np.ndarray:
@@ -71,11 +91,12 @@ class EMSCInternals:
 
     @property
     def polynomial_coefs(self) -> np.ndarray:
-        if self._n_polynomials == 0:
+        slc = self.slices['polynomials']
+        if slc.start == slc.stop:
             raise AttributeError(
                 'poly_order was not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, 1 + self._n_interfs:]
+        return self.coefs[:, slc]
 
 
 class EMSC:
@@ -96,6 +117,9 @@ class EMSC:
     interferents : `(N_interferents, K_channels) np.ndarray`, optional
         Chemical interferents for regression model [2]_. Can be used to add
         orthogonal vectors.
+    analytes : `(N_analytes, K_channels) np.ndarray`, optional
+        Chemical analytes for the ESMC model. They will not be removed from
+        the spectrum.
     scale : `bool`, default True
         If True then spectra will be scaled to reference spectrum.
     rebuild_model : `bool`, default True
@@ -129,6 +153,7 @@ class EMSC:
             wavenumbers=None,
             poly_order: Optional[int] = 2,
             interferents=None,
+            analytes=None,
             weights=None,
             scale: bool = True,
             rebuild_model: bool = True,
@@ -144,6 +169,9 @@ class EMSC:
         self.interferents = interferents
         if self.interferents is not None:
             self.interferents = np.asarray(interferents)
+        self.analytes = analytes
+        if self.analytes is not None:
+            self.analytes = np.asarray(self.analytes)
         self.scale = scale
         self.rebuild_model = rebuild_model
 
@@ -172,12 +200,19 @@ class EMSC:
 
         scaling = coefs[0]
         corr = self.reference + residuals / scaling[:, None]
+        if self.analytes is not None:
+            from_ = 1
+            if self.interferents is not None:
+                from_ += len(self.interferents)
+            anal_coefs = coefs[from_: from_ + len(self.analytes)]
+            corr += np.dot(self.analytes.T, anal_coefs).T / scaling[:, None]
         if not self.scale:
             corr *= scaling[:, None]
 
         if internals:
             internals_ = EMSCInternals(
-                coefs, residuals, self.poly_order, self.interferents)
+                coefs, residuals, self.poly_order,
+                self.interferents, self.analytes)
             return corr, internals_
         return corr
 
@@ -189,6 +224,8 @@ class EMSC:
         columns = [self.reference]
         if self.interferents is not None:
             columns.extend(self.interferents)
+        if self.analytes is not None:
+            columns.extend(self.analytes)
         if self.poly_order is not None:
             columns.append(np.ones_like(self.reference))
             if self.poly_order > 0:
