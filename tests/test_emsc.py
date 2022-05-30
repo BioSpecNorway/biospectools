@@ -123,7 +123,7 @@ class TestEmscFunction:
             spectra_with_constituent, constituent):
         return self.EmscResult(*emsc(
             spectra_with_constituent, wavenumbers, poly_order=None,
-            reference=base_spectrum, constituents=constituent[None],
+            reference=base_spectrum, interferents=constituent[None],
             return_coefs=True))
 
     def test_multiplicative_correction(
@@ -235,20 +235,36 @@ class TestEmscClass:
             inn.polynomial_coefs[:, 1], linear_coefs[:, 0])
         assert_array_almost_equal(inn.coefs[:, 2], linear_coefs[:, 0])
         with pytest.raises(AttributeError):
-            inn.constituents_coefs
+            inn.interferents_coefs
 
     def test_constituents(
             self, wavenumbers, base_spectrum,
             spectra_with_constituent, constituent,
             spectra, constituent_coefs):
         emsc = EMSC(base_spectrum, wavenumbers,
-                    poly_order=None, constituents=constituent[None])
+                    poly_order=None, interferents=constituent[None])
         corrected, inn = emsc.transform(
             spectra_with_constituent, internals=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(
-            inn.constituents_coefs[:, 0], constituent_coefs[:, 0])
+            inn.interferents_coefs[:, 0], constituent_coefs[:, 0])
+        assert_array_almost_equal(inn.coefs[:, 1], constituent_coefs[:, 0])
+        with pytest.raises(AttributeError):
+            inn.polynomial_coefs
+
+    def test_analytes(
+            self, wavenumbers, base_spectrum,
+            spectra_with_constituent, constituent,
+            spectra, constituent_coefs):
+        emsc = EMSC(base_spectrum, wavenumbers,
+                    poly_order=None, analytes=constituent[None])
+        corrected, inn = emsc.transform(
+            spectra_with_constituent, internals=True)
+
+        assert_array_almost_equal(corrected, spectra_with_constituent)
+        assert_array_almost_equal(
+            inn.analytes_coefs[:, 0], constituent_coefs[:, 0])
         assert_array_almost_equal(inn.coefs[:, 1], constituent_coefs[:, 0])
         with pytest.raises(AttributeError):
             inn.polynomial_coefs
