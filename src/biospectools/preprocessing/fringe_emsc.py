@@ -24,7 +24,9 @@ class FringeEMSCInternals:
     polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
         Coefficients for each polynomial order.
     interferents_coefs : `(N_samples, N_interferents) ndarray`
-        Coefficients for each constituent.
+        Coefficients for each interferent.
+    analytes_coefs : `(N_samples, N_analytes) ndarray`
+        Coefficients for each analyte.
     freqs_coefs: `(N_samples, n_freqs, 2) ndarray`
         Coefficients for sin and cos components corresponding
         to frequency in freqs.
@@ -61,6 +63,11 @@ class FringeEMSCInternals:
         if emscs[0].interferents_coefs.shape[1] > n_freq_coefs:
             self.interferents_coefs = np.array(
                 [e.interferents_coefs[0, n_freq_coefs:] for e in emscs])
+        try:
+            self.analytes_coefs = np.array(
+                [e.analytes_coefs[0] for e in emscs])
+        except AttributeError:
+            pass
 
     def _extract_frequencies(self, emscs: List[EMSCInternals]):
         n = self.freqs.shape[1]
@@ -112,6 +119,8 @@ class FringeEMSC:
         Weights of spectra used in the EMSC model.
     interferents : `(N_interferents, K_channels) np.ndarray`, optional
         Chemical interferents for the ESMC model.
+    analytes : `(N_analytes, K_channels) np.ndarray`, optional
+        Chemical analytes for the ESMC model.
     scale : `bool`, default True
         If True then spectra will be scaled to reference spectrum.
     pad_length_multiplier: `int`, (default 5)
@@ -142,6 +151,7 @@ class FringeEMSC:
             poly_order: int = 2,
             weights=None,
             interferents=None,
+            analytes=None,
             scale: bool = True,
             pad_length_multiplier: int = 5,
             double_freq: bool = True,
@@ -154,6 +164,7 @@ class FringeEMSC:
         self.poly_order = poly_order
         self.weights = weights
         self.interferents = interferents
+        self.analytes = analytes
         self.scale = scale
         self.pad_length_multiplier = pad_length_multiplier
         self.double_freq = double_freq
@@ -224,7 +235,7 @@ class FringeEMSC:
             interferents = fringe_comps
         emsc = EMSC(
             self.reference, self.wavenumbers, self.poly_order,
-            interferents, self.weights, self.scale)
+            interferents, self.analytes, self.weights, self.scale)
         return emsc
 
     def _padded_region_length(self, region):
