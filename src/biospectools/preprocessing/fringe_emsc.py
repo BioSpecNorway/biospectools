@@ -170,10 +170,11 @@ class FringeEMSC:
         self.double_freq = double_freq
         self.window_function = window_function
 
+    @deprecated_alias(internals='details')
     def transform(
             self,
             spectra,
-            internals=False) \
+            details=False) \
             -> U[np.ndarray, T[np.ndarray, FringeEMSCInternals]]:
         spectra = np.asarray(spectra)
 
@@ -184,14 +185,14 @@ class FringeEMSC:
             freqs = self._find_fringe_frequencies(spec)
             emsc = self._build_emsc(freqs)
             corr, inns = emsc.transform(
-                spec[None], internals=True, check_correlation=False)
+                spec[None], details=True, check_correlation=False)
 
             corrected.append(corr[0])
             emscs_internals.append(inns)
             all_freqs.append(freqs)
         corrected = np.array(corrected)
 
-        if internals:
+        if details:
             inn = FringeEMSCInternals(emscs_internals, all_freqs)
             return corrected, inn
         return corrected

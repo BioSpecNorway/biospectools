@@ -166,7 +166,7 @@ def default_result(matlab_reference_spectra, matlab_results):
 
     me_emsc = MeEMSC(reference=reference, wavenumbers=wns)
     me_emsc.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
-    preproc, internals = me_emsc.transform(spectra, internals=True)
+    preproc, internals = me_emsc.transform(spectra, details=True)
     return me_emsc, preproc[0, ::20].T, internals
 
 
@@ -177,7 +177,7 @@ def inverse_wns_result(matlab_reference_spectra, matlab_results):
     idxs = np.arange(len(wns))[::-1]
     me_emsc = MeEMSC(reference=reference[idxs], wavenumbers=wns[idxs])
     me_emsc.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
-    preproc, internals = me_emsc.transform(spectra[:, idxs], internals=True)
+    preproc, internals = me_emsc.transform(spectra[:, idxs], details=True)
     unshuffled = preproc[:, idxs]
     return me_emsc, unshuffled[0, ::20].T, internals
 
@@ -188,7 +188,7 @@ def ncomp14_result(matlab_reference_spectra, matlab_results):
 
     me_emsc = MeEMSC(reference=reference, wavenumbers=wns, n_components=14)
     me_emsc.stop_criterion = MatlabStopCriterion(max_iter=30, precision=4)
-    preproc, internals = me_emsc.transform(spectra, internals=True)
+    preproc, internals = me_emsc.transform(spectra, details=True)
     return me_emsc, preproc[0, ::20].T, internals
 
 
@@ -197,7 +197,7 @@ def fixed_iter3_result(matlab_reference_spectra, matlab_results):
     wns, spectra, reference = matlab_reference_spectra
 
     me_emsc = MeEMSC(reference=reference, wavenumbers=wns, max_iter=1)
-    preproc, internals = me_emsc.transform(spectra, internals=True)
+    preproc, internals = me_emsc.transform(spectra, details=True)
     return me_emsc, preproc[0, ::20].T, internals
 
 

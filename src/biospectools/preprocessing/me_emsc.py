@@ -11,6 +11,7 @@ from biospectools.preprocessing import EMSC
 from biospectools.preprocessing.emsc import EMSCInternals
 from biospectools.preprocessing.criterions import \
     BaseStopCriterion, TolStopCriterion, EmptyCriterionError
+from biospectools.utils.deprecated import deprecated_alias
 
 
 class MeEMSCInternals:
@@ -96,7 +97,8 @@ class MeEMSC:
         self.positive_ref = positive_ref
         self.verbose = verbose
 
-    def transform(self, spectra: np.ndarray, internals=False) \
+    @deprecated_alias(internals='details')
+    def transform(self, spectra: np.ndarray, details=False) \
             -> U[np.ndarray, T[np.ndarray, MeEMSCInternals]]:
         ref_x = self.reference
         if self.positive_ref:
@@ -111,10 +113,10 @@ class MeEMSC:
             except np.linalg.LinAlgError:
                 result = np.full_like(self.wavenumbers, np.nan)
             correcteds.append(result)
-            if internals:
+            if details:
                 criterions.append(copy.copy(self.stop_criterion))
 
-        if internals:
+        if details:
             inns = MeEMSCInternals(criterions, self.mie_decomposer.n_components)
             return np.array(correcteds), inns
         return np.array(correcteds)
@@ -124,7 +126,7 @@ class MeEMSC:
         while not self.stop_criterion:
             emsc = self._build_emsc(pure_guess, basic_emsc)
             pure_guess, inn = emsc.transform(
-                spectrum[None], internals=True, check_correlation=False)
+                spectrum[None], details=True, check_correlation=False)
             pure_guess = pure_guess[0]
             rmse = np.sqrt(np.mean(inn.residuals ** 2))
             iter_result = \

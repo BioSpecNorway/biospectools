@@ -207,7 +207,7 @@ class TestEmscClass:
             self, wavenumbers, multiplied_spectra,
             spectra, mult_coefs):
         emsc = EMSC(multiplied_spectra.mean(axis=0), wavenumbers)
-        corrected, inn = emsc.transform(multiplied_spectra, internals=True)
+        corrected, inn = emsc.transform(multiplied_spectra, details=True)
 
         mean = mult_coefs.mean()
         assert_array_almost_equal(corrected, spectra * mean)
@@ -218,7 +218,7 @@ class TestEmscClass:
             self, wavenumbers, base_spectrum, multiplied_spectra,
             spectra, mult_coefs):
         emsc = EMSC(base_spectrum, poly_order=0)
-        corrected, inn = emsc.transform(multiplied_spectra, internals=True)
+        corrected, inn = emsc.transform(multiplied_spectra, details=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(inn.scaling_coefs, mult_coefs[:, 0])
@@ -228,7 +228,7 @@ class TestEmscClass:
             self, wavenumbers, base_spectrum, spectra_linear_effect,
             spectra, linear_coefs):
         emsc = EMSC(base_spectrum, wavenumbers)
-        corrected, inn = emsc.transform(spectra_linear_effect, internals=True)
+        corrected, inn = emsc.transform(spectra_linear_effect, details=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(
@@ -244,7 +244,7 @@ class TestEmscClass:
         emsc = EMSC(base_spectrum, wavenumbers,
                     poly_order=None, interferents=constituent[None])
         corrected, inn = emsc.transform(
-            spectra_with_constituent, internals=True)
+            spectra_with_constituent, details=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(
@@ -260,7 +260,7 @@ class TestEmscClass:
         emsc = EMSC(base_spectrum, wavenumbers,
                     poly_order=None, analytes=constituent[None])
         corrected, inn = emsc.transform(
-            spectra_with_constituent, internals=True)
+            spectra_with_constituent, details=True)
 
         assert_array_almost_equal(corrected, spectra_with_constituent)
         assert_array_almost_equal(
@@ -295,7 +295,7 @@ class TestEmscClass:
         residuals_standard = emsc_data.iloc[6:8].values
 
         emsc = EMSC(raw_spectra.mean(axis=0), wns, poly_order=4)
-        corrected, inn = emsc.transform(raw_spectra, internals=True)
+        corrected, inn = emsc.transform(raw_spectra, details=True)
 
         # scale coefficients to Achim's implementation
         inn.coefs[:, 2] *= -1
@@ -321,7 +321,7 @@ class TestEmscClass:
         residuals_standard = emsc_data.iloc[10:12].values
 
         emsc = EMSC(raw_spectra.mean(axis=0), wns, weights=weights)
-        corrected, inn = emsc.transform(raw_spectra, internals=True)
+        corrected, inn = emsc.transform(raw_spectra, details=True)
 
         # scale coefficients to Achim's implementation
         inn.coefs[:, 2] *= -1

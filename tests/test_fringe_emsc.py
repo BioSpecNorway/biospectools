@@ -56,7 +56,7 @@ def test_fring_emsc(
         interferents=constituent[None],
         n_freq=2, double_freq=True)
     corrected, inn = fringe_emsc.transform(
-        spectrum_with_fringe[None], internals=True)
+        spectrum_with_fringe[None], details=True)
     corrected = corrected[0]
 
     np.testing.assert_almost_equal(corrected, pure_spectrum)

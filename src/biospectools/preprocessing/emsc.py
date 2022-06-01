@@ -180,10 +180,11 @@ class EMSC:
         self._model = None
         self._norm_wns = None
 
+    @deprecated_alias(internals='details')
     def transform(
             self,
             spectra,
-            internals: bool = False,
+            details: bool = False,
             check_correlation: bool = True) \
             -> U[np.ndarray, T[np.ndarray, EMSCInternals]]:
         spectra = np.asarray(spectra)
@@ -209,7 +210,7 @@ class EMSC:
         if not self.scale:
             corr *= scaling[:, None]
 
-        if internals:
+        if details:
             internals_ = EMSCInternals(
                 coefs, residuals, self.poly_order,
                 self.interferents, self.analytes)
