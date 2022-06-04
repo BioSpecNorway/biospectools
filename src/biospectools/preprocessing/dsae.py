@@ -15,11 +15,59 @@ __all__ = ['DSAE']
 
 
 class DSAE:
+    """
+    Descattering Autoencoder (DSAE) [1]_. A neural network that can efficiently
+    substitute ME-EMSC for Mie Scattering correction.
+
+    Pre-trained models
+    ------------------
+    One pre-trained model is available that was trained on
+    fungal data (Mucor circinelloides). It can be loaded using
+    >>> dsae = DSAE.pretrained_on_fungi()
+
+    Parameters
+    ----------
+    wavenumbers: `(N_wns,) array-like`
+        A 1D-array with wavenumbers values that were used to train DSAE
+    filters: `(N_layers,) integer array-like`
+        List of number of filters for each convolutional layer
+    kernel_sizes: `(N_layers,) integer array-like`
+        List of kernel size for each convolutional layer
+    strides: `(N_layers,) integer array-like`
+        List of strides layers in each layer
+    l2_reg: `float`, default 0
+        l2 regularization for each kernel and bias convolutional layer.
+    l1_reg: `float`, default 0
+        l2 regularization for each kernel and bias convolutional layer.
+    pooling: `str`, default 'adverage'
+        Type of pooling layer. Can be 'average' or 'max'
+
+    Other Parameters
+    ----------------
+    model : tf.keras.Model
+        Built tensorflow model
+
+    References
+    ----------
+    .. [1] Magnussen, Eirik Almklov, et al. *Deep convolutional neural
+           network recovers pure absorbance spectra from highly
+           scatter‐distorted spectra of cells.*
+           Journal of Biophotonics 13.12 (2020): e202000204.
+    """
     wavenumbers: np.ndarray
     model: tf.keras.Model
 
     @classmethod
     def pretrained_on_fungi(cls):
+        """
+        The model that was trained in the original article [1]_. The model was
+        trained on fungal data (Mucor circinelloides).
+
+        Returns
+        -------
+        dsae_model: DSAE
+            DSAE model with loaded pre-trained weights.
+        """
         weights_path, wns_path = _download_dsae_files()
 
         dsae = cls(wavenumbers=np.load(wns_path)['wn'].squeeze(), l2_reg=0.001)
@@ -62,6 +110,40 @@ class DSAE:
             filters, kernel_sizes, strides, l2_reg, l1_reg, pooling)
 
     def transform(self, spectra, wns, axis=-1, interpolate=False):
+        """
+        Corrects spectra with DSAE model. The spectra can be automatically
+        interpolated to the required wavenumbers region. The array with spectra
+        can be given in any shape.
+
+        Parameters
+        ----------
+        spectra: `(..., N_wns, ...) array-like`
+            A ND-array containing spectra
+        wns: `(N_wns,) array-like, optional`
+            A 1D-array of wavenumbers. If None then validation of spectral
+            region and interpolation will not be performed.
+        axis: `int, default -1`
+            Axis along which lay spectra (spectral dimension)
+        interpolate: `bool or str, optional`
+            The value will be passed to `extrapolation` parameter of
+            `biospectools.utils.interp2wns`. All values except False or None
+            will perform interpolation. The difference is how boundary exceed
+            is handled.
+
+            Possible values:
+            - False or None - will raise error in case of non-matching
+              wavenumbers.
+            - True - will use default extrapolation of interp1d.
+              See `scipy.interpolate.interp1d`.
+            - 'constant' will use 0 to fill values outside interpolation
+              boundaries
+            - 'bounds' will fill with bound values outside interp. region
+
+        Returns
+        -------
+        corrected_spectra: `(..., N_wns, ...) array-like`
+            A ND-array of input shape with corrected spectra
+        """
         if not interpolate and np.shape(spectra)[axis] != len(self.wavenumbers):
             raise ValueError(
                 f'Shape mismatch. Expected to have {len(self.wavenumbers)} '
