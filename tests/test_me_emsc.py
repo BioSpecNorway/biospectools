@@ -4,7 +4,7 @@ from typing import Optional
 import pytest
 import numpy as np
 from scipy.interpolate import interp1d
-from biospectools.preprocessing.me_emsc import MeEMSC, MeEMSCInternals
+from biospectools.preprocessing.me_emsc import MeEMSC, MeEMSCDetails
 from biospectools.preprocessing.criterions import \
     MatlabStopCriterion, TolStopCriterion
 
@@ -93,7 +93,7 @@ def criterion_finished(emsc_internals_mock):
 
 
 def test_me_emsc_internals_only_invalid_criterions(criterion_empty):
-    inn = MeEMSCInternals(
+    inn = MeEMSCDetails(
         [criterion_empty, criterion_empty],
         n_mie_components=2)
     assert inn.coefs.shape == (2,)
@@ -103,7 +103,7 @@ def test_me_emsc_internals_only_invalid_criterions(criterion_empty):
 
 def test_me_emsc_internals_with_invalid_criterions(
         criterion_empty, criterion_unfinished, criterion_finished):
-    inn = MeEMSCInternals(
+    inn = MeEMSCDetails(
         [criterion_empty, criterion_unfinished, criterion_finished],
         n_mie_components=3)
     assert inn.coefs.shape == (3, 10)
@@ -220,7 +220,7 @@ def test_compare_with_matlab(
     np.testing.assert_equal(gt_rmse, np.round(internals.rmses, decimals=4))
 
 
-def _matlab_ordered_coefs(inn: MeEMSCInternals):
+def _matlab_ordered_coefs(inn: MeEMSCDetails):
     return np.concatenate((
         inn.polynomial_coefs,
         inn.mie_components_coefs,

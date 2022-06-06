@@ -8,13 +8,13 @@ from scipy.interpolate import interp1d
 import numexpr as ne
 
 from biospectools.preprocessing import EMSC
-from biospectools.preprocessing.emsc import EMSCInternals
+from biospectools.preprocessing.emsc import EMSCDetails
 from biospectools.preprocessing.criterions import \
     BaseStopCriterion, TolStopCriterion, EmptyCriterionError
 from biospectools.utils.deprecated import deprecated_alias
 
 
-class MeEMSCInternals:
+class MeEMSCDetails:
     coefs: np.ndarray
     residuals: np.ndarray
     emscs: List[Optional[EMSC]]
@@ -41,7 +41,7 @@ class MeEMSCInternals:
         for c in self.criterions:
             try:
                 self.emscs.append(c.best_value['emsc'])
-                emsc_inns: EMSCInternals = c.best_value['internals']
+                emsc_inns: EMSCDetails = c.best_value['internals']
                 coefs.append(emsc_inns.coefs[0])
                 resds.append(emsc_inns.residuals[0])
                 rmses.append(c.best_score)
@@ -99,7 +99,7 @@ class MeEMSC:
 
     @deprecated_alias(internals='details')
     def transform(self, spectra: np.ndarray, details=False) \
-            -> U[np.ndarray, T[np.ndarray, MeEMSCInternals]]:
+            -> U[np.ndarray, T[np.ndarray, MeEMSCDetails]]:
         ref_x = self.reference
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
@@ -117,7 +117,7 @@ class MeEMSC:
                 criterions.append(copy.copy(self.stop_criterion))
 
         if details:
-            inns = MeEMSCInternals(criterions, self.mie_decomposer.n_components)
+            inns = MeEMSCDetails(criterions, self.mie_decomposer.n_components)
             return np.array(correcteds), inns
         return np.array(correcteds)
 

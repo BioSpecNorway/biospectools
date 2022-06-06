@@ -7,7 +7,7 @@ import numpy as np
 from biospectools.utils.deprecated import deprecated_alias
 
 
-class EMSCInternals:
+class EMSCDetails:
     """Class that contains intermediate results of EMSC algorithm.
 
     Parameters
@@ -186,7 +186,7 @@ class EMSC:
             spectra,
             details: bool = False,
             check_correlation: bool = True) \
-            -> U[np.ndarray, T[np.ndarray, EMSCInternals]]:
+            -> U[np.ndarray, T[np.ndarray, EMSCDetails]]:
         spectra = np.asarray(spectra)
         self._validate_inputs()
         if check_correlation:
@@ -211,7 +211,7 @@ class EMSC:
             corr *= scaling[:, None]
 
         if details:
-            internals_ = EMSCInternals(
+            internals_ = EMSCDetails(
                 coefs, residuals, self.poly_order,
                 self.interferents, self.analytes)
             return corr, internals_

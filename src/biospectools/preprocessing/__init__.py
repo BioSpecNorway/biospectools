@@ -1,7 +1,7 @@
 from .emsc import emsc
-from .emsc import EMSC, EMSCInternals
-from .fringe_emsc import FringeEMSC, FringeEMSCInternals
-from .me_emsc import MeEMSC, MeEMSCInternals
+from .emsc import EMSC, EMSCDetails
+from .fringe_emsc import FringeEMSC, FringeEMSCDetails
+from .me_emsc import MeEMSC, MeEMSCDetails
 
 try:
     from .dsae import DSAE

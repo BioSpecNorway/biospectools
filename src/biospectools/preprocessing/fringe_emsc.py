@@ -5,11 +5,11 @@ import scipy
 from scipy.signal import windows
 
 from biospectools.preprocessing import EMSC
-from biospectools.preprocessing.emsc import EMSCInternals
+from biospectools.preprocessing.emsc import EMSCDetails
 from biospectools.utils.deprecated import deprecated_alias
 
 
-class FringeEMSCInternals:
+class FringeEMSCDetails:
     """Contains intermediate results of FringeEMSC algorithm.
 
     Parameters
@@ -40,13 +40,13 @@ class FringeEMSCInternals:
     AttributeError
         When polynomial's or interferents' coeffs are not available.
     """
-    def __init__(self, emsc_internals: List[EMSCInternals], freqs):
+    def __init__(self, emsc_internals: List[EMSCDetails], freqs):
         self.freqs = np.array(freqs)
         self._gather_emsc_attributes(emsc_internals)
         self._sort_freqs_by_contribution()
         pass
 
-    def _gather_emsc_attributes(self, emscs: List[EMSCInternals]):
+    def _gather_emsc_attributes(self, emscs: List[EMSCDetails]):
         self.coefs = np.array([e.coefs[0] for e in emscs])
         self.scaling_coefs = np.array([e.scaling_coefs[0] for e in emscs])
         self.residuals = np.array([e.residuals[0] for e in emscs])
@@ -69,7 +69,7 @@ class FringeEMSCInternals:
         except AttributeError:
             pass
 
-    def _extract_frequencies(self, emscs: List[EMSCInternals]):
+    def _extract_frequencies(self, emscs: List[EMSCDetails]):
         n = self.freqs.shape[1]
         # each freq has sine and cosine component
         freq_coefs = np.array([e.interferents_coefs[0, :n * 2] for e in emscs])
@@ -175,7 +175,7 @@ class FringeEMSC:
             self,
             spectra,
             details=False) \
-            -> U[np.ndarray, T[np.ndarray, FringeEMSCInternals]]:
+            -> U[np.ndarray, T[np.ndarray, FringeEMSCDetails]]:
         spectra = np.asarray(spectra)
 
         corrected = []
@@ -193,7 +193,7 @@ class FringeEMSC:
         corrected = np.array(corrected)
 
         if details:
-            inn = FringeEMSCInternals(emscs_internals, all_freqs)
+            inn = FringeEMSCDetails(emscs_internals, all_freqs)
             return corrected, inn
         return corrected
 
