@@ -8,24 +8,28 @@ from biospectools.utils.deprecated import deprecated_alias
 
 
 class EMSCDetails:
-    """Class that contains intermediate results of EMSC algorithm.
+    """Class that contains intermediate results of EMSC algorithm. All
+    coefficients preserve the spatial shape of input spectra. For example,
+    if the input spectra had a shape (128, 128, 3000), then all coefficients
+    will have shape starting with (128, 128). The spatial shape will
+    be denoted as ...
 
     Parameters
     ----------
-    coefs : `(N_samples, 1 + N_interferents + N_analytes + (poly_order + 1) ndarray`
+    coefs : `(..., 1 + N_interferents + N_analytes + (poly_order + 1) ndarray`
         All coefficients for each transformed sample. First column is a
         scaling parameter followed by constituent and polynomial coefs.
         This is a transposed solution of equation
         _model @ coefs.T = spectrum.
-    scaling_coefs : `(N_samples,) ndarray`
+    scaling_coefs : `(...,) ndarray`
         Scaling coefficients (reference to the first column of coefs_).
-    polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
+    polynomial_coefs : `(..., poly_order + 1) ndarray`
         Coefficients for each polynomial order.
-    interferents_coefs : `(N_samples, N_interferents) ndarray`
+    interferents_coefs : `(..., N_interferents) ndarray`
         Coefficients for each interferent.
-    analytes_coefs : `(N_samples, N_analytes) ndarray`
+    analytes_coefs : `(..., N_analytes) ndarray`
         Coefficients for each analyte.
-    residuals : `(N_samples, K_channels) ndarray`
+    residuals : `(..., K_channels) ndarray`
          Chemical residuals that were not fitted by EMSC model.
 
     Raises
