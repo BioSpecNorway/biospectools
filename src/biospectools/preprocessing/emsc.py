@@ -41,9 +41,11 @@ class EMSCDetails:
             poly_order: Optional[int],
             interferents: Optional[np.ndarray],
             analytes: Optional[np.ndarray]):
-        assert len(coefs.T) == len(residuals), 'Inconsistent number of spectra'
+        assert np.shape(coefs)[:-1] == np.shape(residuals)[:-1], \
+            f'Inconsistent number of spectra ' \
+            f'{np.shape(coefs)[:-1]} != {np.shape(residuals)[:-1]}'
 
-        self.coefs = coefs.T
+        self.coefs = coefs
         self.residuals = residuals
 
         if interferents is None:
@@ -63,7 +65,7 @@ class EMSCDetails:
 
     @property
     def scaling_coefs(self) -> np.ndarray:
-        return self.coefs[:, 0]
+        return self.coefs[..., 0]
 
     @property
     def interferents_coefs(self) -> np.ndarray:
@@ -72,7 +74,7 @@ class EMSCDetails:
             raise AttributeError(
                 'interferents were not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, slc]
+        return self.coefs[..., slc]
 
     @property
     def analytes_coefs(self) -> np.ndarray:
@@ -81,7 +83,7 @@ class EMSCDetails:
             raise AttributeError(
                 'analytes were not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, slc]
+        return self.coefs[..., slc]
 
     @property
     def constituents_coefs(self) -> np.ndarray:
@@ -96,7 +98,7 @@ class EMSCDetails:
             raise AttributeError(
                 'poly_order was not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, slc]
+        return self.coefs[..., slc]
 
 
 class EMSC:
@@ -189,6 +191,11 @@ class EMSC:
             -> U[np.ndarray, T[np.ndarray, EMSCDetails]]:
         spectra = np.asarray(spectra)
         self._validate_inputs()
+
+        spatial_shape = spectra.shape[:-1]
+        n_wns = spectra.shape[-1]
+        spectra = spectra.reshape(-1, n_wns)
+
         if check_correlation:
             self._check_high_correlation(spectra)
 
@@ -209,6 +216,10 @@ class EMSC:
             corr += np.dot(self.analytes.T, anal_coefs).T / scaling[:, None]
         if not self.scale:
             corr *= scaling[:, None]
+
+        corr = corr.reshape(spatial_shape + (n_wns,))
+        residuals = residuals.reshape(spatial_shape + (n_wns,))
+        coefs = coefs.T.reshape(spatial_shape + (-1,))
 
         if details:
             internals_ = EMSCDetails(
