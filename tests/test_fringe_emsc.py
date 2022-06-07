@@ -2,6 +2,7 @@ import os
 
 import pytest
 import numpy as np
+from numpy.testing import assert_array_almost_equal, assert_almost_equal
 
 from biospectools.preprocessing import FringeEMSC
 
@@ -74,3 +75,52 @@ def test_fring_emsc(
         inn.polynomial_coefs
     ), axis=1)
     np.testing.assert_almost_equal(inn.coefs, coefs)
+
+
+def test_reshaping(
+        wavenumbers, pure_spectrum, constituent,
+        spectrum_with_fringe, freqs, amps):
+
+    fringe_emsc = FringeEMSC(
+        pure_spectrum, wavenumbers, fringe_wn_location=(1724, 1924),
+        interferents=constituent[None],
+        n_freq=2, double_freq=True)
+    n_coefs = 1 + 4*2 + 1 + 3
+
+    # 1D-array
+    corrected, inn = fringe_emsc.transform(
+        spectrum_with_fringe, details=True)
+    assert corrected.shape == pure_spectrum.shape
+    assert inn.coefs.shape == (n_coefs,)
+    assert_array_almost_equal(inn.freqs[:2], freqs)
+    assert_array_almost_equal(inn.freqs_coefs[:2], amps)
+    assert_almost_equal(inn.freqs_coefs[2:], 0)
+    assert_almost_equal(inn.scaling_coefs, 0.1)
+    assert_almost_equal(inn.interferents_coefs, 3)
+    assert_array_almost_equal(corrected, pure_spectrum)
+
+    # 3D-array
+    shape_3d = (3, 5, len(pure_spectrum))
+    raw_spectra = np.broadcast_to(spectrum_with_fringe, shape_3d)
+    gt = np.broadcast_to(pure_spectrum, shape_3d)
+
+    corrected, inn = fringe_emsc.transform(raw_spectra, details=True)
+    assert corrected.shape == raw_spectra.shape
+    assert inn.coefs.shape == shape_3d[:2] + (n_coefs,)
+    assert inn.scaling_coefs.shape == shape_3d[:2]
+    assert_array_almost_equal(
+        inn.freqs[..., :2],
+        np.broadcast_to(freqs, inn.freqs[..., :2].shape))
+    assert_array_almost_equal(
+        inn.freqs_coefs[..., :2, :],
+        np.broadcast_to(amps, inn.freqs_coefs[..., :2, :].shape))
+    assert_array_almost_equal(
+        inn.freqs_coefs[..., 2:, :],
+        np.broadcast_to(0, inn.freqs_coefs[..., 2:, :].shape))
+    assert_array_almost_equal(
+        inn.scaling_coefs,
+        np.broadcast_to(0.1, inn.scaling_coefs.shape))
+    assert_array_almost_equal(
+        inn.interferents_coefs,
+        np.broadcast_to(3, inn.interferents_coefs.shape))
+    assert_array_almost_equal(corrected, gt)
