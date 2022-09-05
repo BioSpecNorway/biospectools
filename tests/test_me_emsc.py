@@ -3,6 +3,7 @@ from typing import Optional
 
 import pytest
 import numpy as np
+from numpy.testing import assert_array_almost_equal, assert_almost_equal
 from scipy.interpolate import interp1d
 from biospectools.preprocessing.me_emsc import MeEMSC, MeEMSCDetails
 from biospectools.preprocessing.criterions import \
@@ -224,4 +225,49 @@ def _matlab_ordered_coefs(inn: MeEMSCDetails):
     return np.concatenate((
         inn.polynomial_coefs,
         inn.mie_components_coefs,
-        inn.scaling_coefs[:, None]), axis=1)
+        inn.scaling_coefs[..., None]), axis=-1)
+
+
+def test_reshaping(matlab_reference_spectra, matlab_results):
+    wns, spectra, reference = matlab_reference_spectra
+    gt_spec, gt_coefs, gt_resid, gt_niter, gt_rmse = matlab_results['default']
+    single_spectrum = spectra[0]
+
+    me_emsc = MeEMSC(reference=reference, wavenumbers=wns)
+    me_emsc.stop_criterion = MatlabStopCriterion(max_iter=45, precision=4)
+
+    # 1D-array
+    corrected, dtls = me_emsc.transform(
+        single_spectrum, details=True)
+    dtls: MeEMSCDetails
+    # each 20th wn, since ground truth data have it like this
+    corrected = corrected[::20]
+
+    rearranged_coefs = _matlab_ordered_coefs(dtls)
+
+    assert corrected.shape == gt_spec.shape
+    assert_array_almost_equal(corrected, gt_spec)
+    assert_array_almost_equal(np.abs(rearranged_coefs), np.abs(gt_coefs))
+    assert_array_almost_equal(dtls.residuals[::20], gt_resid)
+    assert_almost_equal(dtls.n_iterations, gt_niter)
+    assert_almost_equal(np.round(dtls.rmses, 4), gt_rmse)
+
+    # 3D-array
+    shape_3d = (3, 5, len(single_spectrum))
+    raw_spectra = np.broadcast_to(single_spectrum, shape_3d)
+    gt_spec = np.broadcast_to(gt_spec, (3, 5, len(gt_spec)))
+    gt_coefs_3d = np.broadcast_to(gt_coefs, (3, 5, len(gt_coefs)))
+    gt_resid_3d = np.broadcast_to(gt_resid, (3, 5, len(gt_resid)))
+    gt_niter_3d = np.broadcast_to(gt_niter, (3, 5))
+    gt_rmse_3d = np.broadcast_to(gt_rmse, (3, 5))
+
+    corrected, dtls = me_emsc.transform(raw_spectra, details=True)
+    corrected = corrected[..., ::20]
+    rearranged_coefs = _matlab_ordered_coefs(dtls)
+
+    assert corrected.shape == gt_spec.shape
+    assert_array_almost_equal(corrected, gt_spec)
+    assert_array_almost_equal(np.abs(rearranged_coefs), np.abs(gt_coefs_3d))
+    assert_array_almost_equal(dtls.residuals[..., ::20], gt_resid_3d)
+    assert_almost_equal(dtls.n_iterations, gt_niter_3d)
+    assert_almost_equal(np.round(dtls.rmses, 4), gt_rmse_3d)

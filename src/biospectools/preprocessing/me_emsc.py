@@ -26,13 +26,20 @@ class MeEMSCDetails:
     def __init__(
             self,
             criterions: List[BaseStopCriterion],
-            n_mie_components: int):
+            n_mie_components: int, spatial_shape=None):
         self.criterions = criterions
         self.n_mie_components = n_mie_components
         if self.n_mie_components <= 0:
             raise ValueError('n_components must be greater than 0')
 
         self._extract_from_criterions()
+
+        if spatial_shape is not None:
+            shape_ = spatial_shape + (-1,)
+            self.rmses = self.rmses.reshape(spatial_shape)
+            self.n_iterations = self.n_iterations.reshape(spatial_shape)
+            self.coefs = self.coefs.reshape(shape_)
+            self.residuals = self.residuals.reshape(shape_)
 
     def _extract_from_criterions(self):
         self.emscs = []
@@ -58,17 +65,17 @@ class MeEMSCDetails:
 
     @property
     def scaling_coefs(self) -> np.ndarray:
-        return self.coefs[:, 0]
+        return self.coefs[..., 0]
 
     @property
     def mie_components_coefs(self) -> np.ndarray:
         assert self.n_mie_components > 0, \
             'Number of mie components must be greater than zero'
-        return self.coefs[:, 1:1 + self.n_mie_components]
+        return self.coefs[..., 1:1 + self.n_mie_components]
 
     @property
     def polynomial_coefs(self) -> np.ndarray:
-        return self.coefs[:, -1:]
+        return self.coefs[..., -1:]
 
 
 class MeEMSC:
@@ -105,6 +112,10 @@ class MeEMSC:
             ref_x[ref_x < 0] = 0
         basic_emsc = EMSC(ref_x, self.wavenumbers, rebuild_model=False)
 
+        spatial_shape = spectra.shape[:-1]
+        n_wns = spectra.shape[-1]
+        spectra = spectra.reshape(-1, n_wns)
+
         correcteds = []
         criterions = []
         for spectrum in spectra:
@@ -116,10 +127,13 @@ class MeEMSC:
             if details:
                 criterions.append(copy.copy(self.stop_criterion))
 
+        correcteds = np.array(correcteds).reshape(spatial_shape + (n_wns,))
+
         if details:
-            inns = MeEMSCDetails(criterions, self.mie_decomposer.n_components)
-            return np.array(correcteds), inns
-        return np.array(correcteds)
+            dtls = MeEMSCDetails(
+                criterions, self.mie_decomposer.n_components, spatial_shape)
+            return correcteds, dtls
+        return correcteds
 
     def _correct_spectrum(self, basic_emsc, pure_guess, spectrum):
         self.stop_criterion.reset()
