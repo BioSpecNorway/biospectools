@@ -13,6 +13,7 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../src'))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 
 # -- Project information -----------------------------------------------------
@@ -33,6 +34,7 @@ extensions = [
     'myst_parser',
     'sphinx.ext.napoleon',
     'matplotlib.sphinxext.plot_directive',
+    'doi_role'
 ]
 
 napoleon_google_docstring = False
