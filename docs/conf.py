@@ -31,7 +31,9 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
     'myst_parser',
-    'sphinx.ext.napoleon']
+    'sphinx.ext.napoleon',
+    'matplotlib.sphinxext.plot_directive',
+]
 
 napoleon_google_docstring = False
 napoleon_use_param = False
@@ -57,3 +59,13 @@ html_theme = 'sphinx_rtd_theme'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+
+# ------------------------------------------------------------------------------
+# Matplotlib plot_directive options
+# ------------------------------------------------------------------------------
+
+plot_include_source = True
+plot_formats = [('png', 96)]
+plot_html_show_formats = False
+plot_html_show_source_link = False
