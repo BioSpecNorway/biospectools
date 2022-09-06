@@ -1,11 +1,11 @@
 import warnings
-from packaging import version
 
 import numpy as np
 import scipy
 from . import _pls
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.utils import check_array, check_consistent_length
+from packaging import version
 
 
 if version.parse(scipy.__version__) >= version.parse("1.7"):

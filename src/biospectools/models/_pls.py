@@ -10,12 +10,12 @@ The :mod:`sklearn.pls` module implements Partial Least Squares (PLS).
 
 import warnings
 from abc import ABCMeta, abstractmethod
-from packaging import version
 
 import numpy as np
 import scipy
 from scipy.linalg import svd
 from scipy.sparse.linalg import svds
+from packaging import version
 
 from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
 from sklearn.base import MultiOutputMixin
