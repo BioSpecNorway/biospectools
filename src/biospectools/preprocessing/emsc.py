@@ -8,24 +8,28 @@ from biospectools.utils.deprecated import deprecated_alias
 
 
 class EMSCDetails:
-    """Class that contains intermediate results of EMSC algorithm.
+    """Class that contains intermediate results of EMSC algorithm. All
+    coefficients preserve the spatial shape of input spectra. For example,
+    if the input spectra had a shape (128, 128, 3000), then all coefficients
+    will have shape starting with (128, 128). The spatial shape will
+    be denoted as ...
 
     Parameters
     ----------
-    coefs : `(N_samples, 1 + N_interferents + N_analytes + (poly_order + 1) ndarray`
+    coefs : `(..., 1 + N_interferents + N_analytes + (poly_order + 1) ndarray`
         All coefficients for each transformed sample. First column is a
         scaling parameter followed by constituent and polynomial coefs.
         This is a transposed solution of equation
         _model @ coefs.T = spectrum.
-    scaling_coefs : `(N_samples,) ndarray`
+    scaling_coefs : `(...,) ndarray`
         Scaling coefficients (reference to the first column of coefs_).
-    polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
+    polynomial_coefs : `(..., poly_order + 1) ndarray`
         Coefficients for each polynomial order.
-    interferents_coefs : `(N_samples, N_interferents) ndarray`
+    interferents_coefs : `(..., N_interferents) ndarray`
         Coefficients for each interferent.
-    analytes_coefs : `(N_samples, N_analytes) ndarray`
+    analytes_coefs : `(..., N_analytes) ndarray`
         Coefficients for each analyte.
-    residuals : `(N_samples, K_channels) ndarray`
+    residuals : `(..., K_channels) ndarray`
          Chemical residuals that were not fitted by EMSC model.
 
     Raises
@@ -41,9 +45,11 @@ class EMSCDetails:
             poly_order: Optional[int],
             interferents: Optional[np.ndarray],
             analytes: Optional[np.ndarray]):
-        assert len(coefs.T) == len(residuals), 'Inconsistent number of spectra'
+        assert np.shape(coefs)[:-1] == np.shape(residuals)[:-1], \
+            f'Inconsistent number of spectra ' \
+            f'{np.shape(coefs)[:-1]} != {np.shape(residuals)[:-1]}'
 
-        self.coefs = coefs.T
+        self.coefs = coefs
         self.residuals = residuals
 
         if interferents is None:
@@ -63,7 +69,7 @@ class EMSCDetails:
 
     @property
     def scaling_coefs(self) -> np.ndarray:
-        return self.coefs[:, 0]
+        return self.coefs[..., 0]
 
     @property
     def interferents_coefs(self) -> np.ndarray:
@@ -72,7 +78,7 @@ class EMSCDetails:
             raise AttributeError(
                 'interferents were not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, slc]
+        return self.coefs[..., slc]
 
     @property
     def analytes_coefs(self) -> np.ndarray:
@@ -81,7 +87,7 @@ class EMSCDetails:
             raise AttributeError(
                 'analytes were not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, slc]
+        return self.coefs[..., slc]
 
     @property
     def constituents_coefs(self) -> np.ndarray:
@@ -96,7 +102,7 @@ class EMSCDetails:
             raise AttributeError(
                 'poly_order was not set up. '
                 'Did you forget to call transform?')
-        return self.coefs[:, slc]
+        return self.coefs[..., slc]
 
 
 class EMSC:
@@ -189,6 +195,11 @@ class EMSC:
             -> U[np.ndarray, T[np.ndarray, EMSCDetails]]:
         spectra = np.asarray(spectra)
         self._validate_inputs()
+
+        spatial_shape = spectra.shape[:-1]
+        n_wns = spectra.shape[-1]
+        spectra = spectra.reshape(-1, n_wns)
+
         if check_correlation:
             self._check_high_correlation(spectra)
 
@@ -209,6 +220,10 @@ class EMSC:
             corr += np.dot(self.analytes.T, anal_coefs).T / scaling[:, None]
         if not self.scale:
             corr *= scaling[:, None]
+
+        corr = corr.reshape(spatial_shape + (n_wns,))
+        residuals = residuals.reshape(spatial_shape + (n_wns,))
+        coefs = coefs.T.reshape(spatial_shape + (-1,))
 
         if details:
             internals_ = EMSCDetails(

@@ -4,7 +4,7 @@ import collections
 import pytest
 from unittest.mock import patch
 import numpy as np
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal, assert_almost_equal
 import pandas as pd
 
 from biospectools.preprocessing.emsc import emsc
@@ -332,6 +332,41 @@ class TestEmscClass:
             emsc_weights_params[:, :-3], inn.polynomial_coefs)
         assert_array_almost_equal(
             emsc_weights_params[:, -3], inn.scaling_coefs)
+
+    def test_reshaping(
+            self, base_spectrum, spectra_with_constituent, constituent,
+            spectra, constituent_coefs):
+        emsc = EMSC(base_spectrum, poly_order=None,
+                    interferents=constituent[None])
+
+        # 1d input array
+        raw_spectrum = spectra_with_constituent[0]
+        corrected, inn = emsc.transform(raw_spectrum, details=True)
+        assert corrected.shape == raw_spectrum.shape
+        assert inn.coefs.shape == (2,)
+        assert_almost_equal(inn.scaling_coefs, 1)
+        assert_almost_equal(inn.interferents_coefs, constituent_coefs[0, 0])
+        assert_array_almost_equal(corrected, spectra[0])
+        with pytest.raises(AttributeError):
+            inn.polynomial_coefs
+
+        # 3d input array
+        shape = spectra_with_constituent.shape
+        shape_3d = (shape[0], 5, shape[1])
+        raw_spectra = np.broadcast_to(
+            spectra_with_constituent[:, None], shape_3d)
+        const_coefs_3d = np.broadcast_to(
+            constituent_coefs[:, None],
+            shape_3d[:2] + constituent_coefs.shape[-1:])
+        gt = np.broadcast_to(spectra[:, None], shape_3d)
+        corrected, inn = emsc.transform(raw_spectra, details=True)
+        assert corrected.shape == raw_spectra.shape
+        assert inn.coefs.shape == shape_3d[:2] + (2,)
+        assert_almost_equal(inn.scaling_coefs, np.ones(shape_3d[:2]))
+        assert_almost_equal(inn.interferents_coefs, const_coefs_3d)
+        assert_array_almost_equal(corrected, gt)
+        with pytest.raises(AttributeError):
+            inn.polynomial_coefs
 
     def test_rebuild_model(self, base_spectrum, multiplied_spectra):
         emsc = EMSC(base_spectrum, poly_order=0, rebuild_model=False)

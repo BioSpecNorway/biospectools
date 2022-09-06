@@ -10,29 +10,33 @@ from biospectools.utils.deprecated import deprecated_alias
 
 
 class FringeEMSCDetails:
-    """Contains intermediate results of FringeEMSC algorithm.
+    """Contains intermediate results of FringeEMSC algorithm. All
+    coefficients preserve the spatial shape of input spectra. For example,
+    if the input spectra had a shape (128, 128, 3000), then all coefficients
+    will have shape starting with (128, 128). The spatial shape will
+    be denoted as ...
 
     Parameters
     ----------
-    coefs : `(N_samples, 1 + N_constituents + (poly_order + 1) ndarray`
+    coefs : `(..., 1 + N_constituents + (poly_order + 1) ndarray`
         All coefficients for each transformed sample. First column is a
         scaling parameter followed by constituent and polynomial coefs.
         This is a transposed solution of equation
         _model @ coefs.T = spectrum.
-    scaling_coefs : `(N_samples,) ndarray`
+    scaling_coefs : `(...,) ndarray`
         Scaling coefficients (reference to the first column of coefs_).
-    polynomial_coefs : `(N_samples, poly_order + 1) ndarray`
+    polynomial_coefs : `(..., poly_order + 1) ndarray`
         Coefficients for each polynomial order.
-    interferents_coefs : `(N_samples, N_interferents) ndarray`
+    interferents_coefs : `(..., N_interferents) ndarray`
         Coefficients for each interferent.
-    analytes_coefs : `(N_samples, N_analytes) ndarray`
+    analytes_coefs : `(..., N_analytes) ndarray`
         Coefficients for each analyte.
-    freqs_coefs: `(N_samples, n_freqs, 2) ndarray`
+    freqs_coefs: `(..., n_freqs, 2) ndarray`
         Coefficients for sin and cos components corresponding
         to frequency in freqs.
-    freqs: `(N_samples, n_freqs) ndarray`
+    freqs: `(..., n_freqs) ndarray`
         List of frequencies sorted by their prominance in fringes.
-    residuals : `(N_samples, K_channels) ndarray`
+    residuals : `(..., K_channels) ndarray`
          Chemical residuals that were not fitted by EMSC model.
 
     Raises
@@ -40,45 +44,50 @@ class FringeEMSCDetails:
     AttributeError
         When polynomial's or interferents' coeffs are not available.
     """
-    def __init__(self, emsc_internals: List[EMSCDetails], freqs):
+    def __init__(self, emsc_internals: List[EMSCDetails], freqs, input_shape):
         self.freqs = np.array(freqs)
+        self.input_shape = input_shape
         self._gather_emsc_attributes(emsc_internals)
         self._sort_freqs_by_contribution()
-        pass
 
     def _gather_emsc_attributes(self, emscs: List[EMSCDetails]):
-        self.coefs = np.array([e.coefs[0] for e in emscs])
-        self.scaling_coefs = np.array([e.scaling_coefs[0] for e in emscs])
-        self.residuals = np.array([e.residuals[0] for e in emscs])
+        shp = self.input_shape[:-1] + (-1,)
+        self.coefs = np.array(
+            [e.coefs for e in emscs]).reshape(shp)
+        self.scaling_coefs = np.array(
+            [e.scaling_coefs for e in emscs]).reshape(shp[:-1])
+        self.residuals = np.array(
+            [e.residuals for e in emscs]).reshape(shp)
 
         try:
             self.polynomial_coefs = np.array(
-                [e.polynomial_coefs[0] for e in emscs])
+                [e.polynomial_coefs for e in emscs]).reshape(shp)
         except AttributeError:
             pass
 
         self.freqs_coefs = self._extract_frequencies(emscs)
 
-        n_freq_coefs = self.freqs.shape[1] * 2
-        if emscs[0].interferents_coefs.shape[1] > n_freq_coefs:
+        n_freq_coefs = self.freqs.shape[-1] * 2
+        if emscs[0].interferents_coefs.shape[-1] > n_freq_coefs:
             self.interferents_coefs = np.array(
-                [e.interferents_coefs[0, n_freq_coefs:] for e in emscs])
+                [e.interferents_coefs[n_freq_coefs:] for e in emscs])
+            self.interferents_coefs = self.interferents_coefs.reshape(shp)
         try:
             self.analytes_coefs = np.array(
-                [e.analytes_coefs[0] for e in emscs])
+                [e.analytes_coefs for e in emscs]).reshape(shp)
         except AttributeError:
             pass
 
     def _extract_frequencies(self, emscs: List[EMSCDetails]):
-        n = self.freqs.shape[1]
+        n = self.freqs.shape[-1]
         # each freq has sine and cosine component
-        freq_coefs = np.array([e.interferents_coefs[0, :n * 2] for e in emscs])
-        return freq_coefs.reshape((-1, n, 2))
+        freq_coefs = np.array([e.interferents_coefs[:n * 2] for e in emscs])
+        return freq_coefs.reshape((*self.input_shape[:-1], n, 2))
 
     def _sort_freqs_by_contribution(self):
         freq_scores = np.abs(self.freqs_coefs).sum(axis=-1)
         idxs = np.argsort(-freq_scores, axis=-1)  # descendent
-        idxs = np.unravel_index(idxs, self.freqs_coefs.shape[:2])
+        idxs = np.unravel_index(idxs, self.freqs_coefs.shape[:-1])
 
         self.freqs = self.freqs[idxs]
         self.freqs_coefs = self.freqs_coefs[idxs]
@@ -87,10 +96,11 @@ class FringeEMSCDetails:
         # take into account that freq's sine and cosine components
         # are flattened in coefs_ and we want to move sin and cos
         # together
-        n = self.freqs.shape[1]
-        freq_coefs = self.coefs[:, 1: n * 2 + 1]
-        reordered = freq_coefs.reshape(-1, n, 2)[idxs].reshape(-1, n*2)
-        self.coefs[:, 1: n * 2 + 1] = reordered
+        n = self.freqs.shape[-1]
+        freq_coefs = self.coefs[..., 1: n * 2 + 1]
+        reordered = freq_coefs.reshape(*self.input_shape[:-1], n, 2)[idxs]
+        reordered = reordered.reshape(*self.input_shape[:-1], n*2)
+        self.coefs[..., 1: n * 2 + 1] = reordered
 
 
 class FringeEMSC:
@@ -177,6 +187,8 @@ class FringeEMSC:
             details=False) \
             -> U[np.ndarray, T[np.ndarray, FringeEMSCDetails]]:
         spectra = np.asarray(spectra)
+        input_shape = spectra.shape
+        spectra = spectra.reshape(-1, input_shape[-1])
 
         corrected = []
         emscs_internals = []
@@ -185,15 +197,16 @@ class FringeEMSC:
             freqs = self._find_fringe_frequencies(spec)
             emsc = self._build_emsc(freqs)
             corr, inns = emsc.transform(
-                spec[None], details=True, check_correlation=False)
+                spec, details=True, check_correlation=False)
 
-            corrected.append(corr[0])
+            corrected.append(corr)
             emscs_internals.append(inns)
             all_freqs.append(freqs)
-        corrected = np.array(corrected)
+        corrected = np.array(corrected).reshape(input_shape)
+        all_freqs = np.array(all_freqs).reshape(input_shape[:-1] + (-1,))
 
         if details:
-            inn = FringeEMSCDetails(emscs_internals, all_freqs)
+            inn = FringeEMSCDetails(emscs_internals, all_freqs, input_shape)
             return corrected, inn
         return corrected
 
