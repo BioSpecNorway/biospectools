@@ -1,6 +1,10 @@
 Spectra preprocessing
 =========================================
 
+Before infrared absorbance spectra are analyzed, common practice is to
+preprocess the spectra. In this tutorial, we will show how to use the
+biospectools package to preprocess spectra in different cases.
+
 .. note::
 
     The tutorial is under development. If you found a mistake or want to suggest
@@ -10,19 +14,18 @@ Spectra preprocessing
 
 .. contents::
 
-Before just measured spectra can be used for data analysis, they must be
-first preprocessed. In this tutorial, you will learn how to use algorithms
-from the biospectools package to preprocess spectra in different cases.
-
 .. _tutorials standard emsc:
 
 Standard spectral correction (EMSC)
 -----------------------------------
 
-Often measured spectra have only simple scattering effects such as
-multiplicative, linear, and quadratic effects. In this case, the Extended
-Multiplicative Scattering Correction (EMSC) method [Mart91]_ can be used to
-remove linear and quadratic effects and normalize spectra.
+Often measured spectra have only simple scattering effects such as baseline
+offset, linear, and quadratic effects. Also due to variation in sample
+thickness one may see multiplicative effects in spectra that often require
+normalization. In this case, the standard Extended Multiplicative Scattering
+Correction (EMSC) method (using second polynomial order,
+see :ref:`section above<tutorials emsc framework>`) [Mart91]_
+can be used to remove the baseline variations and normalize spectra.
 
 >>> from biospectools import EMSC
 >>> reference_spectrum = raw_spectra.mean(axis=0)
@@ -38,54 +41,56 @@ remove linear and quadratic effects and normalize spectra.
 EMSC Framework
 --------------
 
-EMSC method [Mart91]_ helps to remove unwanted variation in spectra. First, it
-decomposes spectrum into given components. One of the components must always
+The EMSC method [Mart91]_ is used to remove unwanted variation in spectra. First, it
+decomposes the spectrum into given components. One of the components must always
 be a reference spectrum, while other components usually model variations in
 raw spectra that need to be removed. Using the least squares method, EMSC
 estimates the contribution of each given component. After the contribution of
 each component is known, it reconstructs a spectrum using only
-"good" components, i. e. removing unwanted components.
+relevant components, while excluding unwanted components.
 
-For example, The basic model described in the :ref:`section above<tutorials standard emsc>`
-includes reference spectrum, baseline, linear and quadratic components
-denoted below in bold as a :math:`\mathbf{reference}`, :math:`\mathbf{1}`,
-:math:`\mathbf{\tilde{\nu}}`, :math:`\mathbf{\tilde{\nu}^2}`.
+For example, the basic model described in the :ref:`section above<tutorials standard emsc>`
+includes a reference spectrum, baseline, linear and quadratic components
+denoted below in bold as :math:`\mathbf{reference}`, :math:`\mathbf{1}`,
+:math:`\mathbf{\tilde{\nu}}`, :math:`\mathbf{\tilde{\nu}^2}`, respectively.
 Their contributions are denoted as coefficients :math:`b`, :math:`a`, :math:`c`,
-:math:`d`. The error term :math:`e(\tilde{\nu})` denotes all variation in a
-spectrum that could not be represented with given components. Thus, from the
-formula below we see that the corrected spectrum is like a raw spectrum but
-without contibution of baseline, linear and quadratic components. In other
-words, the corrected spectrum is a reference spectrum plus variation that did
-not fit any other component (roughly speaking, chemical information)
-normalized by a scaling coefficient :math:`b`.
+:math:`d`. The residual term :math:`e(\tilde{\nu})` denotes all variation in
+the spectrum that could not be represented with the given components. Thus,
+from the formula below we see that the corrected spectrum is equals the raw
+spectrum but without contibution of the baseline offset, and the linear and
+quadratic components. In other words, the corrected spectrum is a reference
+spectrum plus variation that did not fit any other component normalized by a
+scaling coefficient :math:`b`.
 
 .. math::
 
     spectrum(\tilde{\nu}) &= b*\mathbf{reference(\tilde{\nu})} + a*\mathbf{1} + c*\mathbf{\tilde{\nu}} + d*\mathbf{\tilde{\nu}^2} + е(\tilde{\nu}) \\
     corrected(\tilde{\nu}) &= \mathbf{reference(\tilde{\nu})} + \frac{e(\tilde{\nu})}{b}
 
-`EMSC` class has a parameter ``poly_order=2`` that adds baseline, linear
-and quadratic components. The parameter can be changed, for example, to
-``poly_order=3``, then it will also add a cubic component ( :math:`\tilde{\nu}^3`).
+The `EMSC` class has a parameter ``poly_order=2`` that gives the highest order
+of the polynomial terms used in the model. The parameter can be changed, for example, to
+``poly_order=3``, then it will also add a cubic component (:math:`\tilde{\nu}^3`).
 Using higher-order polynomials in EMSC may help to model more sophisticated
 scattering. However, too big polynomial order will make the
 model so versatile that it may start to remove chemical information from
 a spectrum, e. g. remove peaks. So it is always a tradeoff between removing
 scattering features and leaving chemical information. As a consensus, a
-default value ``poly_order=2`` is used often.
+default value ``poly_order=2`` is often used for mid infrared absorbance
+spectra. For Raman spectra, the polynomial order can be significantly higher [Afse12]_
 
 In the following sections, we will show how the EMSC model can be further
 extended to perform spectra correction in more sophisticated cases.
 
-Removing water/paraffin contribution (EMSC)
--------------------------------------------
+Removing irrelevant chemical components (EMSC)
+----------------------------------------------
 
 In some cases, a sample may contain unwanted chemical components. For
-example, biological samples may have water leftovers and
-cancer tissue slides are usually embedded in paraffin. In those cases, the
-contribution given by interferent components is irrelevant for the subsequent
-analysis. It can be removed by the EMSC model extended with a spectrum of
-unwanted chemical component [Solh22]_ [Afse12]_.
+example, biological samples may have a varying degree of water content due to
+variations in the humidity. Further, tissue sections are often embedded in
+paraffin, which leaves signals from paraffin in the absorbance spectra. In
+those cases, the contribution given by interferent components is irrelevant
+for the subsequent analysis. It can be removed by the EMSC model extended
+with a spectrum of unwanted chemical component [Solh22]_ [Afse12]_.
 
 A list of unwanted chemical components can be passed to the `EMSC` model through
 `interferents` parameter. Then during preprocessing, EMSC will remove those
@@ -99,22 +104,26 @@ interferents from spectra.
 Fringe correction (Fringe-EMSC)
 -------------------------------
 
-Samples in the shape of thin film (e. g. waxed tissue section, sample
-slices), may have sine-like distortions in spectra, commonly referred to as
-fringes. Fringes can be removed automatically by a Fringe-EMSC algorithm
+Samples in the shape of thin film (e. g. waxed tissue section, sample slices)
+, may have sine-like baseline distortions in spectra, commonly referred to as
+fringes. Fringes can be removed automatically by the Fringe-EMSC algorithm
 [Solh21]_. For the estimation of fringe parameters, the algorithm requires a
-wavenumbers range of a chemically silent region (usually 1800-2800 cm-1).
+wavenumber range of a chemically silent region (usually 1800-2800 cm-1),
+where the fringes are most clearly pronounced.
 
 The example below shows spectra of hair cross-sections [Sand21]_. Hair
-cross-sections have a thin-film shape, so we see fringes in the
-spectra. We use Fringe-EMSC to remove fringes. In addition to standard
-parameters, we are using weights to instruct the EMSC model to pay more or
-less attention to some regions of the spectra [Solh22]_. Here we want to fit
-fringes well while allowing more underfitting in absorption regions. In other
-words, we want to ask the EMSC model to decompose a spectrum into components
-that represent fringes well while only approximately representing absorption
-regions. To achieve it, we set silent regions to have greater weight than
-absorption regions.
+cross-sections have a thin-film shape, so we see fringes in the spectra. To
+remove them we used Fringe-EMSC. As a reference spectrum we took a spectrum
+of matrigel, which is not exactly representative for the hair spectra.
+Therefore in addition to standard parameters, here we used feature weights. The
+weights are used to tell the EMSC model to pay more or less attention
+to some regions of the spectra [Solh22]_. In this particular case, we
+decreased the weights of the absorbance regions to allow bigger fitting error
+in those regions (since the reference spectrum is not very well fitting),
+while allowing less fitting error in the fringes region. Without weighting,
+the discrepancies between the reference spectrum and the raw spectra in
+chemically active regions would drag away the sine-components from fitting
+fringes well.
 
 >>> from biospectools import FringeEMSC
 >>> reference = matrigel
@@ -133,13 +142,15 @@ Mie scattering correction
 -------------------------
 
 Mie-type scattering often occurs in infrared microspectroscopy, where
-measured samples are of microscopic size [Mohl05]_. At this scale, an infrared
-spectrum shows not only the chemical properties of a sample but also its
-morphological features like size and shape. Mie scattering may
-affect the measured spectrum so strongly that its usual peaks get reversed, and
-the absorbance spectrum starts to remind a transmission spectrum. Mie
-scattering complicates the subsequent chemical analysis of samples and usually
-should be removed by preprocessing methods.
+measured samples are of micrometer size [Mohl05]_. At this scale, an infrared
+spectrum is not only affected by the chemical properties of a sample but also
+its morphological features like size and shape. Usually, Mie scattering
+appears as a broad wave in the spectrum accompanied by deepenes near the base
+of peaks. Sometimes, Mie scattering may affect the measured spectrum so
+strongly that its usual peaks get reversed, and the absorbance spectrum
+starts to remind a transmission spectrum. Mie scattering complicates the
+subsequent chemical analysis of samples and usually should be removed by
+preprocessing methods.
 
 Here is an example of a spectrum of a microplastic bead of 5.5 um diameter
 (PMMA sphere) that exhibits strong Mie scattering features.
@@ -152,17 +163,20 @@ Here is an example of a spectrum of a microplastic bead of 5.5 um diameter
 Model-based approach (ME-EMSC)
 ______________________________
 
-ME-EMSC is a state-of-the-art algorithm for Mie scattering correction [Solh19]_.
-It extends the EMSC model with Mie components that should fit Mie scattering.
-ME-EMSC algorithm starts from a reference spectrum as a first guess and
-then iteratively improves this guess until changes after the next iteration
-become negligible. During each iteration ME-EMSC algorithm builds Mie curves
-using physical theory (Mie theory). Those curves account for different
-possible morphologies of a particle given its chemical properties (reference
-spectrum). When the curves are built, ME-EMSC decomposes them into orthogonal
-components that will be added to the EMSC model. Then, the raw spectrum gets
-corrected, and the corrected spectrum becomes a new reference spectrum for
-the next iteration.
+ME-EMSC is a state-of-the-art algorithm for Mie scattering correction of
+infrared transmission spectra obtained from spherical samples [Solh19]_. The
+algorithm employs a Mie subspace-model, where possible scattering
+realizations are computed using Mie theory. The solutions are compressed by
+PCA into a subspace-model consisting of the PCA loadings. The loadings are
+used as components for the EMSC model, and the scattering contribution in the
+measured spectrum is thus parameterized and removed in the ME-EMSC. In order
+to compute the possible scattering realizations using Mie theory, the
+reference spectrum is used. It serves as input for the initial estimate of
+the imaginary part of the refractive index. After the first iteration, the reference
+spectrum is updated to the corrected spectrum. Iteration by iteration, the
+distinct chemical features of the pure absorbance spectrum is gradually
+retrieved. We refere to [Solh19_] for more details.
+
 
 >>> from biospectools import MeEMSC
 >>> memsc = MeEMSC(reference, wns)
@@ -175,17 +189,13 @@ the next iteration.
 Advanced usage
 ^^^^^^^^^^^^^^
 
-Our implementation of the ME-EMSC algorithm has three parts that can be
-easily replaced: Mie curves generator, Mie curves decomposer, and a stopping
-criterium.
-
-Mie curves generator produces all possible measured spectra given pure
-absorbance spectrum and wavenumbers. Mie decomposer given a list of Mie
-curves produces components for the EMSC model to fit Mie scattering. Finally,
-the stopping criterium decides when ME-EMSC got a precise enough answer to stop
-the algorithm.
-
-Those parts can be replaced by custom classes implementing specific interfaces:
+For the ones, who are developing correction algorithms might be potentially
+interesting to change some particular steps of the ME-EMSC algorithms. Our
+implementation allows to easily change the following steps: the way how mie
+curves are generated (`CustomMieCurvesGenerator`), the way how mie curves are
+decomposed (`CustomMieCurvesDecomposer`) and the deicision when to stop
+iteration based on the mean squared error ( `CustomStopCriterium`). To do it,
+a class with a particular method must be implemented:
 
 >>> class CustomMieCurvesGenerator:
 >>>     ...
@@ -227,11 +237,11 @@ for ME-EMSC correction. Additionally, it removes noise from spectra.
 Training
 ^^^^^^^^
 
-Usually, the DSAE model needs to be trained from scratch for each new problem. It
-means that first, you will need to run ME-EMSC preprocessing for some small
-part of your dataset, then train the DSAE model to predict ME-EMSC correction
-given raw spectra, and then the DSAE model can be applied to the rest of the
-dataset.
+Usually, the DSAE model needs to be trained from scratch for each new problem
+. It means that first, you will need to run ME-EMSC preprocessing for some
+small part of your dataset, then train the DSAE model to predict ME-EMSC
+correction given raw spectra, and then the DSAE model can be applied to the
+rest of the dataset.
 
 DSAE object builds a TensorFlow model, so `TensorFlow <https://www.tensorflow.org/tutorials>`_
 or `Keras <https://keras.io/examples/>`_ framework is required for training.
