@@ -4,7 +4,7 @@ import collections
 import pytest
 from unittest.mock import patch
 import numpy as np
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal, assert_almost_equal
 import pandas as pd
 
 from biospectools.preprocessing.emsc import emsc
@@ -46,7 +46,8 @@ def wavenumbers():
 @pytest.fixture
 def norm_wns(wavenumbers):
     half_rng = np.abs(wavenumbers[0] - wavenumbers[-1]) / 2
-    return (wavenumbers - np.mean(wavenumbers)) / half_rng
+    mid_point = (wavenumbers.min() + wavenumbers.max()) / 2
+    return (wavenumbers - mid_point) / half_rng
 
 
 @pytest.fixture
@@ -122,7 +123,7 @@ class TestEmscFunction:
             spectra_with_constituent, constituent):
         return self.EmscResult(*emsc(
             spectra_with_constituent, wavenumbers, poly_order=None,
-            reference=base_spectrum, constituents=constituent[None],
+            reference=base_spectrum, interferents=constituent[None],
             return_coefs=True))
 
     def test_multiplicative_correction(
@@ -206,7 +207,7 @@ class TestEmscClass:
             self, wavenumbers, multiplied_spectra,
             spectra, mult_coefs):
         emsc = EMSC(multiplied_spectra.mean(axis=0), wavenumbers)
-        corrected, inn = emsc.transform(multiplied_spectra, internals=True)
+        corrected, inn = emsc.transform(multiplied_spectra, details=True)
 
         mean = mult_coefs.mean()
         assert_array_almost_equal(corrected, spectra * mean)
@@ -217,7 +218,7 @@ class TestEmscClass:
             self, wavenumbers, base_spectrum, multiplied_spectra,
             spectra, mult_coefs):
         emsc = EMSC(base_spectrum, poly_order=0)
-        corrected, inn = emsc.transform(multiplied_spectra, internals=True)
+        corrected, inn = emsc.transform(multiplied_spectra, details=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(inn.scaling_coefs, mult_coefs[:, 0])
@@ -227,27 +228,43 @@ class TestEmscClass:
             self, wavenumbers, base_spectrum, spectra_linear_effect,
             spectra, linear_coefs):
         emsc = EMSC(base_spectrum, wavenumbers)
-        corrected, inn = emsc.transform(spectra_linear_effect, internals=True)
+        corrected, inn = emsc.transform(spectra_linear_effect, details=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(
             inn.polynomial_coefs[:, 1], linear_coefs[:, 0])
         assert_array_almost_equal(inn.coefs[:, 2], linear_coefs[:, 0])
         with pytest.raises(AttributeError):
-            inn.constituents_coefs
+            inn.interferents_coefs
 
     def test_constituents(
             self, wavenumbers, base_spectrum,
             spectra_with_constituent, constituent,
             spectra, constituent_coefs):
         emsc = EMSC(base_spectrum, wavenumbers,
-                    poly_order=None, constituents=constituent[None])
+                    poly_order=None, interferents=constituent[None])
         corrected, inn = emsc.transform(
-            spectra_with_constituent, internals=True)
+            spectra_with_constituent, details=True)
 
         assert_array_almost_equal(corrected, spectra)
         assert_array_almost_equal(
-            inn.constituents_coefs[:, 0], constituent_coefs[:, 0])
+            inn.interferents_coefs[:, 0], constituent_coefs[:, 0])
+        assert_array_almost_equal(inn.coefs[:, 1], constituent_coefs[:, 0])
+        with pytest.raises(AttributeError):
+            inn.polynomial_coefs
+
+    def test_analytes(
+            self, wavenumbers, base_spectrum,
+            spectra_with_constituent, constituent,
+            spectra, constituent_coefs):
+        emsc = EMSC(base_spectrum, wavenumbers,
+                    poly_order=None, analytes=constituent[None])
+        corrected, inn = emsc.transform(
+            spectra_with_constituent, details=True)
+
+        assert_array_almost_equal(corrected, spectra_with_constituent)
+        assert_array_almost_equal(
+            inn.analytes_coefs[:, 0], constituent_coefs[:, 0])
         assert_array_almost_equal(inn.coefs[:, 1], constituent_coefs[:, 0])
         with pytest.raises(AttributeError):
             inn.polynomial_coefs
@@ -278,7 +295,7 @@ class TestEmscClass:
         residuals_standard = emsc_data.iloc[6:8].values
 
         emsc = EMSC(raw_spectra.mean(axis=0), wns, poly_order=4)
-        corrected, inn = emsc.transform(raw_spectra, internals=True)
+        corrected, inn = emsc.transform(raw_spectra, details=True)
 
         # scale coefficients to Achim's implementation
         inn.coefs[:, 2] *= -1
@@ -304,7 +321,7 @@ class TestEmscClass:
         residuals_standard = emsc_data.iloc[10:12].values
 
         emsc = EMSC(raw_spectra.mean(axis=0), wns, weights=weights)
-        corrected, inn = emsc.transform(raw_spectra, internals=True)
+        corrected, inn = emsc.transform(raw_spectra, details=True)
 
         # scale coefficients to Achim's implementation
         inn.coefs[:, 2] *= -1
@@ -315,6 +332,41 @@ class TestEmscClass:
             emsc_weights_params[:, :-3], inn.polynomial_coefs)
         assert_array_almost_equal(
             emsc_weights_params[:, -3], inn.scaling_coefs)
+
+    def test_reshaping(
+            self, base_spectrum, spectra_with_constituent, constituent,
+            spectra, constituent_coefs):
+        emsc = EMSC(base_spectrum, poly_order=None,
+                    interferents=constituent[None])
+
+        # 1d input array
+        raw_spectrum = spectra_with_constituent[0]
+        corrected, inn = emsc.transform(raw_spectrum, details=True)
+        assert corrected.shape == raw_spectrum.shape
+        assert inn.coefs.shape == (2,)
+        assert_almost_equal(inn.scaling_coefs, 1)
+        assert_almost_equal(inn.interferents_coefs, constituent_coefs[0, 0])
+        assert_array_almost_equal(corrected, spectra[0])
+        with pytest.raises(AttributeError):
+            inn.polynomial_coefs
+
+        # 3d input array
+        shape = spectra_with_constituent.shape
+        shape_3d = (shape[0], 5, shape[1])
+        raw_spectra = np.broadcast_to(
+            spectra_with_constituent[:, None], shape_3d)
+        const_coefs_3d = np.broadcast_to(
+            constituent_coefs[:, None],
+            shape_3d[:2] + constituent_coefs.shape[-1:])
+        gt = np.broadcast_to(spectra[:, None], shape_3d)
+        corrected, inn = emsc.transform(raw_spectra, details=True)
+        assert corrected.shape == raw_spectra.shape
+        assert inn.coefs.shape == shape_3d[:2] + (2,)
+        assert_almost_equal(inn.scaling_coefs, np.ones(shape_3d[:2]))
+        assert_almost_equal(inn.interferents_coefs, const_coefs_3d)
+        assert_array_almost_equal(corrected, gt)
+        with pytest.raises(AttributeError):
+            inn.polynomial_coefs
 
     def test_rebuild_model(self, base_spectrum, multiplied_spectra):
         emsc = EMSC(base_spectrum, poly_order=0, rebuild_model=False)

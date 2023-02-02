@@ -8,12 +8,13 @@ from scipy.interpolate import interp1d
 import numexpr as ne
 
 from biospectools.preprocessing import EMSC
-from biospectools.preprocessing.emsc import EMSCInternals
+from biospectools.preprocessing.emsc import EMSCDetails
 from biospectools.preprocessing.criterions import \
     BaseStopCriterion, TolStopCriterion, EmptyCriterionError
+from biospectools.utils.deprecated import deprecated_alias
 
 
-class MeEMSCInternals:
+class MeEMSCDetails:
     coefs: np.ndarray
     residuals: np.ndarray
     emscs: List[Optional[EMSC]]
@@ -25,13 +26,20 @@ class MeEMSCInternals:
     def __init__(
             self,
             criterions: List[BaseStopCriterion],
-            n_mie_components: int):
+            n_mie_components: int, spatial_shape=None):
         self.criterions = criterions
         self.n_mie_components = n_mie_components
         if self.n_mie_components <= 0:
             raise ValueError('n_components must be greater than 0')
 
         self._extract_from_criterions()
+
+        if spatial_shape is not None:
+            shape_ = spatial_shape + (-1,)
+            self.rmses = self.rmses.reshape(spatial_shape)
+            self.n_iterations = self.n_iterations.reshape(spatial_shape)
+            self.coefs = self.coefs.reshape(shape_)
+            self.residuals = self.residuals.reshape(shape_)
 
     def _extract_from_criterions(self):
         self.emscs = []
@@ -40,7 +48,7 @@ class MeEMSCInternals:
         for c in self.criterions:
             try:
                 self.emscs.append(c.best_value['emsc'])
-                emsc_inns: EMSCInternals = c.best_value['internals']
+                emsc_inns: EMSCDetails = c.best_value['internals']
                 coefs.append(emsc_inns.coefs[0])
                 resds.append(emsc_inns.residuals[0])
                 rmses.append(c.best_score)
@@ -57,17 +65,17 @@ class MeEMSCInternals:
 
     @property
     def scaling_coefs(self) -> np.ndarray:
-        return self.coefs[:, 0]
+        return self.coefs[..., 0]
 
     @property
     def mie_components_coefs(self) -> np.ndarray:
         assert self.n_mie_components > 0, \
             'Number of mie components must be greater than zero'
-        return self.coefs[:, 1:1 + self.n_mie_components]
+        return self.coefs[..., 1:1 + self.n_mie_components]
 
     @property
     def polynomial_coefs(self) -> np.ndarray:
-        return self.coefs[:, -1:]
+        return self.coefs[..., -1:]
 
 
 class MeEMSC:
@@ -96,12 +104,17 @@ class MeEMSC:
         self.positive_ref = positive_ref
         self.verbose = verbose
 
-    def transform(self, spectra: np.ndarray, internals=False) \
-            -> U[np.ndarray, T[np.ndarray, MeEMSCInternals]]:
+    @deprecated_alias(internals='details')
+    def transform(self, spectra: np.ndarray, details=False) \
+            -> U[np.ndarray, T[np.ndarray, MeEMSCDetails]]:
         ref_x = self.reference
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
         basic_emsc = EMSC(ref_x, self.wavenumbers, rebuild_model=False)
+
+        spatial_shape = spectra.shape[:-1]
+        n_wns = spectra.shape[-1]
+        spectra = spectra.reshape(-1, n_wns)
 
         correcteds = []
         criterions = []
@@ -111,20 +124,23 @@ class MeEMSC:
             except np.linalg.LinAlgError:
                 result = np.full_like(self.wavenumbers, np.nan)
             correcteds.append(result)
-            if internals:
+            if details:
                 criterions.append(copy.copy(self.stop_criterion))
 
-        if internals:
-            inns = MeEMSCInternals(criterions, self.mie_decomposer.n_components)
-            return np.array(correcteds), inns
-        return np.array(correcteds)
+        correcteds = np.array(correcteds).reshape(spatial_shape + (n_wns,))
+
+        if details:
+            dtls = MeEMSCDetails(
+                criterions, self.mie_decomposer.n_components, spatial_shape)
+            return correcteds, dtls
+        return correcteds
 
     def _correct_spectrum(self, basic_emsc, pure_guess, spectrum):
         self.stop_criterion.reset()
         while not self.stop_criterion:
             emsc = self._build_emsc(pure_guess, basic_emsc)
             pure_guess, inn = emsc.transform(
-                spectrum[None], internals=True, check_correlation=False)
+                spectrum[None], details=True, check_correlation=False)
             pure_guess = pure_guess[0]
             rmse = np.sqrt(np.mean(inn.residuals ** 2))
             iter_result = \
@@ -148,7 +164,7 @@ class MeEMSC:
         qexts = self._orthogonalize(qexts, reference)
         components = self.mie_decomposer.find_orthogonal_components(qexts)
 
-        emsc = EMSC(reference, poly_order=0, constituents=components)
+        emsc = EMSC(reference, poly_order=0, interferents=components)
         return emsc
 
     def _orthogonalize(self, qext: np.ndarray, reference: np.ndarray):

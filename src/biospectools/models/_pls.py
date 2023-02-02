@@ -12,8 +12,10 @@ import warnings
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
-from scipy.linalg import pinv2, svd
+import scipy
+from scipy.linalg import svd
 from scipy.sparse.linalg import svds
+from packaging import version
 
 from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
 from sklearn.base import MultiOutputMixin
@@ -24,6 +26,14 @@ from sklearn.utils.validation import _deprecate_positional_args
 from sklearn.exceptions import ConvergenceWarning
 
 __all__ = ['PLSCanonical', 'PLSRegression', 'PLSSVD']
+
+
+if version.parse(scipy.__version__) >= version.parse("1.7"):
+    # Starting in scipy 1.7 pinv2 was deprecated in favor of pinv.
+    # pinv now uses the svd to compute the pseudo-inverse.
+    from scipy.linalg import pinv as pinv2
+else:
+    from scipy.linalg import pinv2
 
 
 def _nipals_twoblocks_inner_loop(X, Y, mode="A", max_iter=500, tol=1e-06,

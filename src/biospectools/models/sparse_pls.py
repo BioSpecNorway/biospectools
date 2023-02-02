@@ -1,10 +1,19 @@
 import warnings
 
 import numpy as np
-from scipy.linalg import pinv2
+import scipy
 from . import _pls
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.utils import check_array, check_consistent_length
+from packaging import version
+
+
+if version.parse(scipy.__version__) >= version.parse("1.7"):
+    # Starting in scipy 1.7 pinv2 was deprecated in favor of pinv.
+    # pinv now uses the svd to compute the pseudo-inverse.
+    from scipy.linalg import pinv as pinv2
+else:
+    from scipy.linalg import pinv2
 
 
 class SparsePLSRegression(_pls._PLS):
