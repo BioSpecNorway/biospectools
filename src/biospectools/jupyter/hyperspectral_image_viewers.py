@@ -77,7 +77,7 @@ def interactive_himg(
 
     # Moving mouse over himg
     def onmove(event):
-        i, j = int(event.ydata), int(event.xdata)
+        i, j = round(event.ydata), round(event.xdata)
         sp_line.set_ydata(himg[i, j])
         spec_ax.relim()
         spec_ax.autoscale_view()
@@ -87,7 +87,7 @@ def interactive_himg(
     # Clicking on himg and spectrum
     def onclick(event):
         if event.inaxes == img_ax:
-            i, j = int(event.ydata), int(event.xdata)
+            i, j = round(event.ydata), round(event.xdata)
             spec_ax.plot(wns, himg[i, j], label=f'{i}, {j}')
             spec_ax.legend()
             img_ax.scatter(j, i)
