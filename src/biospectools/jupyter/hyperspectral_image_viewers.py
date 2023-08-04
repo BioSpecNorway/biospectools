@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from itertools import chain
-from typing import Optional as Opt, Tuple, List, Callable
+from typing import Optional as Opt, Tuple, Callable
 
 import numpy as np
 import matplotlib.pyplot as plt
