@@ -18,16 +18,20 @@ def interactive_himg(
         himg: np.ndarray,
         wns: Opt[np.ndarray] = None,
         init_wn: Opt[float] = None,
+        percentile: int = None,
         figsize: Tuple[float, float] = (9, 3),
         cmap='turbo'):
     """Interactive exploration of a hyperspectral image.
 
     The figure shows selected wavenumber slice of a
     hyperspectral image and a corresponding spectrum
-    under the pointer. Clicking on the image will fix
-    the spectrum for comparison with others. Clicking
-    on the spectrum will select a wavenumber for the
-    slice of the hyperspectral image.
+    under the pointer.
+
+    Controls
+    --------
+
+    - To fix a spectrum for comparison, click on the image
+    - To select a wavenumber, click on the spectrum
 
     Notes
     -----
@@ -54,6 +58,10 @@ def interactive_himg(
     figsize: `(float, float)`, optional
         figsize parameter for the `plt.figure` func.
         Default (9, 3)
+    percentile: float
+       A value between 0 and 100 to suppress outliers. Will
+       set color limits according to perc and 100-perc values.
+       Default None.
     cmap: `str`, optional
         cmap parameter for the `plt.imshow` func.
         Default 'turbo'
@@ -109,8 +117,11 @@ def interactive_himg(
 
     def update(wn):
         i = np.argmin(np.abs(wns - wn))
-        img.set_data(himg[..., i])
-        img.set_clim(himg[..., i].min(), himg[..., i].max())
+        slice_ = himg[..., i]
+        clim = _get_color_boundaries(
+            himg_slices=[slice_], mode='relative', percentile=percentile)
+        img.set_data(slice_)
+        img.set_clim(*clim)
         wn_line.set_data([wn, wn], [0, 1])
         fig.canvas.draw_idle()
 
