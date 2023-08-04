@@ -133,7 +133,7 @@ def compare_himgs(
         init_wn: Opt[float] = None,
         figsize: Tuple[float, float] = (9, 6),
         percentile: int = None,
-        mode: str ='relative',
+        mode: str = 'relative',
         normalizer: Callable = None,
         cmap='turbo'):
     """Interactive comparison of several hyperspectral images.
@@ -278,8 +278,8 @@ def compare_himgs(
             is_cursor_fixed[0] = not is_cursor_fixed[0]
             idx = img_axes.index(event.inaxes)
             cursors[idx].set_visible(is_cursor_fixed[0])
-            for l in lines:
-                l.set_linestyle('-' if is_cursor_fixed[0] else '--')
+            for line in lines:
+                line.set_linestyle('-' if is_cursor_fixed[0] else '--')
 
     def toggle_cursors(event):
         try:
@@ -379,4 +379,3 @@ def _get_color_boundaries(himg_slices, mode, percentile):
         return bounds
     else:
         ValueError(f'Unknown himg comparison mode {mode}')
-
