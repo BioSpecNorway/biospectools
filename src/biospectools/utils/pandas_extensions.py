@@ -2,22 +2,19 @@ import numpy as np
 import pandas as pd
 
 
-def find_closest_numeric_column(df, value):
-    numeric_columns = {}
+def find_closest_numeric_column(df, wn_value):
+    num_cols = {}
     for col in df.columns:
         try:
-            numeric_col = float(col)
-            numeric_columns[col] = numeric_col
+            num_cols[col] = float(col)
         except ValueError:
             continue
 
-    if not numeric_columns:
+    if not num_cols:
         return None
 
-    differences = {col: abs(numeric_col - value)
-                   for col, numeric_col in numeric_columns.items()}
-    closest_column = min(differences, key=differences.get)
-    return closest_column
+    return list(num_cols.keys())[
+           np.argmin(np.abs(np.array(list(num_cols.values())) - wn_value))]
 
 
 def can_convert_to_float(s):
@@ -38,14 +35,25 @@ class SpectraAccessor:
     def _validate(obj):
         pass
 
+    def _get_float_columns(self):
+        return [col for col in self.df.columns if can_convert_to_float(col)]
+
     def get_wns(self):
-        return np.array([col for col in self.df.columns
-                         if can_convert_to_float(col)]).astype("float")
+        return np.array(self._get_float_columns()).astype("float")
 
     def get_spectra(self):
-        float_columns = [col for col in self.df.columns
-                         if can_convert_to_float(col)]
-        return self.df[float_columns].values
+        return self.df[self._get_float_columns()].values
 
-    def __getitem__(self, wn):
-        return self.df[find_closest_numeric_column(self.df, wn)].values
+    def __getitem__(self, wn_value):
+
+        if type(wn_value) is not tuple:
+            return self.df[find_closest_numeric_column(self.df, wn_value)].values
+
+        wn_list = []
+        for val in wn_value:
+            wn_list.append(find_closest_numeric_column(self.df, val))
+        return self.df[wn_list].values
+
+
+
+
