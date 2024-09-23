@@ -9,8 +9,11 @@ import numexpr as ne
 
 from biospectools.preprocessing import EMSC
 from biospectools.preprocessing.emsc import EMSCDetails
-from biospectools.preprocessing.criterions import \
-    BaseStopCriterion, TolStopCriterion, EmptyCriterionError
+from biospectools.preprocessing.criterions import (
+    BaseStopCriterion,
+    TolStopCriterion,
+    EmptyCriterionError,
+)
 from biospectools.utils.deprecated import deprecated_alias
 
 
@@ -24,13 +27,15 @@ class MeEMSCDetails:
     n_mie_components: int
 
     def __init__(
-            self,
-            criterions: List[BaseStopCriterion],
-            n_mie_components: int, spatial_shape=None):
+        self,
+        criterions: List[BaseStopCriterion],
+        n_mie_components: int,
+        spatial_shape=None,
+    ):
         self.criterions = criterions
         self.n_mie_components = n_mie_components
         if self.n_mie_components <= 0:
-            raise ValueError('n_components must be greater than 0')
+            raise ValueError("n_components must be greater than 0")
 
         self._extract_from_criterions()
 
@@ -47,8 +52,8 @@ class MeEMSCDetails:
         rmses, iters, coefs, resds = np_arrs
         for c in self.criterions:
             try:
-                self.emscs.append(c.best_value['emsc'])
-                emsc_inns: EMSCDetails = c.best_value['internals']
+                self.emscs.append(c.best_value["emsc"])
+                emsc_inns: EMSCDetails = c.best_value["internals"]
                 coefs.append(emsc_inns.coefs[0])
                 resds.append(emsc_inns.residuals[0])
                 rmses.append(c.best_score)
@@ -60,8 +65,9 @@ class MeEMSCDetails:
                 rmses.append(np.nan)
                 iters.append(0)
 
-        self.rmses, self.n_iterations, self.coefs, self.residuals = \
-            [np.array(np.broadcast_arrays(*arr)) for arr in np_arrs]
+        self.rmses, self.n_iterations, self.coefs, self.residuals = [
+            np.array(np.broadcast_arrays(*arr)) for arr in np_arrs
+        ]
 
     @property
     def scaling_coefs(self) -> np.ndarray:
@@ -69,8 +75,9 @@ class MeEMSCDetails:
 
     @property
     def mie_components_coefs(self) -> np.ndarray:
-        assert self.n_mie_components > 0, \
-            'Number of mie components must be greater than zero'
+        assert (
+            self.n_mie_components > 0
+        ), "Number of mie components must be greater than zero"
         return self.coefs[..., 1:1 + self.n_mie_components]
 
     @property
@@ -79,20 +86,72 @@ class MeEMSCDetails:
 
 
 class MeEMSC:
+    """Mie Extinction Extended multiplicative signal correction (ME-EMSC) [1]_.
+
+    Parameters
+    ----------
+    reference : `(K_channels,) ndarray`
+        Reference spectrum.
+    wavenumbers : `(K_channels,) ndarray`, optional
+        Wavenumbers for the spectra must be passed.
+    n_components : ´Optional[int]´ default None
+        Number of components of from the PCA decomposed scattering curves
+        to use in the EMSC. If None the PC components will be chosen
+        such that they have 99.96 percent explained variance.
+    n0s : ´(M_curves,) ndarray´ default None
+        Refractive indices to use to generate the scattering curves.
+    radiuses : ´(M_curves,) ndarray´´ default None
+        Radii to use to generate the scattering curves.
+    h : ´float´ default 0.25
+        Scaling factor in getting the imaginary part of the
+        complex refractive index from the pure absorbance.
+    weights : ´(K_channels,) ndarray´ default None
+        Weights to scale the reference spectrum at every iteration.
+    max_iter : ´int´ default 30
+        Maximum number of iterations the algorithm can run.
+    tol : ´float´ default 1e-4
+        How much we require the residuals to decrease.
+    patience : ´int´ default 1
+        Number of iterations with residuals increasing less than
+        tolerance before we stop the correction.
+    positive_ref : ´bool´ default True
+        If True the reference spectrum will be forced to be strictly positive
+        by setting all negative values to zero.
+    verbose : ´bool´, default False
+        If True track the progress of correction.
+
+
+    Other Parameters
+    ----------------
+    _model : `(K_channels, 2 + n_components) ndarray`
+        Matrix that is used to solve least squares. First column is a
+        baseline constant and second the reference spectrum scaling constant
+        followed by principal components of the decomposed scatter curves.
+    _norm_wns : `(K_channels,) ndarray`
+        Normalized wavenumbers to -1, 1 range
+
+    References
+    ----------
+    .. [1] J. H. Solheim et al. *An open-source code for Mie extinction
+           extended multiplicative signal correction for infrared microscopy
+           spectra of cells and tissue* Journal of biophotonics, 12(8), 2019.
+    """
+
     def __init__(
-            self,
-            reference: np.ndarray,
-            wavenumbers: np.ndarray,
-            n_components: Optional[int] = None,
-            n0s: np.ndarray = None,
-            radiuses: np.ndarray = None,
-            h: float = 0.25,
-            weights: np.ndarray = None,
-            max_iter: int = 30,
-            tol: float = 1e-4,
-            patience: int = 1,
-            positive_ref: bool = True,
-            verbose: bool = False):
+        self,
+        reference: np.ndarray,
+        wavenumbers: np.ndarray,
+        n_components: Optional[int] = None,
+        n0s: np.ndarray = None,
+        radiuses: np.ndarray = None,
+        h: float = 0.25,
+        weights: np.ndarray = None,
+        max_iter: int = 30,
+        tol: float = 1e-4,
+        patience: int = 1,
+        positive_ref: bool = True,
+        verbose: bool = False,
+    ):
         self.reference = reference
         self.wavenumbers = wavenumbers
         self.weights = weights
@@ -104,9 +163,10 @@ class MeEMSC:
         self.positive_ref = positive_ref
         self.verbose = verbose
 
-    @deprecated_alias(internals='details')
-    def transform(self, spectra: np.ndarray, details=False) \
-            -> U[np.ndarray, T[np.ndarray, MeEMSCDetails]]:
+    @deprecated_alias(internals="details")
+    def transform(
+        self, spectra: np.ndarray, details=False
+    ) -> U[np.ndarray, T[np.ndarray, MeEMSCDetails]]:
         ref_x = self.reference
         if self.positive_ref:
             ref_x[ref_x < 0] = 0
@@ -131,7 +191,8 @@ class MeEMSC:
 
         if details:
             dtls = MeEMSCDetails(
-                criterions, self.mie_decomposer.n_components, spatial_shape)
+                criterions, self.mie_decomposer.n_components, spatial_shape
+            )
             return correcteds, dtls
         return correcteds
 
@@ -140,18 +201,17 @@ class MeEMSC:
         while not self.stop_criterion:
             emsc = self._build_emsc(pure_guess, basic_emsc)
             pure_guess, inn = emsc.transform(
-                spectrum[None], details=True, check_correlation=False)
+                spectrum[None], details=True, check_correlation=False
+            )
             pure_guess = pure_guess[0]
             rmse = np.sqrt(np.mean(inn.residuals ** 2))
-            iter_result = \
-                {'corrected': pure_guess, 'internals': inn, 'emsc': emsc}
+            iter_result = {"corrected": pure_guess, "internals": inn, "emsc": emsc}
             self.stop_criterion.add(rmse, iter_result)
-        return self.stop_criterion.best_value['corrected']
+        return self.stop_criterion.best_value["corrected"]
 
     def _build_emsc(self, reference, basic_emsc: EMSC) -> EMSC:
         # scale with basic EMSC:
-        reference = basic_emsc.transform(
-            reference[None], check_correlation=False)[0]
+        reference = basic_emsc.transform(reference[None], check_correlation=False)[0]
         if np.all(np.isnan(reference)):
             raise np.linalg.LinAlgError()
 
@@ -198,20 +258,21 @@ class MatlabMieCurvesGenerator:
         return qexts
 
     def _calculate_qext_curves(self, nprs, nkks, wavenumbers):
-        rho = self.alpha0s * (1 + self.gammas*nkks) * wavenumbers  # noqa: F841
+        rho = self.alpha0s * (1 + self.gammas * nkks) * wavenumbers  # noqa: F841
         tanbeta = nprs / (1 / self.gammas + nkks)
         beta = np.arctan(tanbeta)  # noqa: F841
         qexts = ne.evaluate(
-            '2 - 4 * exp(-rho * tanbeta) * cos(beta) / rho * sin(rho - beta)'
-            '- 4 * exp(-rho * tanbeta) * (cos(beta) / rho) ** 2 * cos(rho - 2 * beta)'
-            '+ 4 * (cos(beta) / rho) ** 2 * cos(2 * beta)')
+            "2 - 4 * exp(-rho * tanbeta) * cos(beta) / rho * sin(rho - beta)"
+            "- 4 * exp(-rho * tanbeta) * (cos(beta) / rho) ** 2 * cos(rho - 2 * beta)"
+            "+ 4 * (cos(beta) / rho) ** 2 * cos(2 * beta)"
+        )
         return qexts.reshape(-1, len(wavenumbers))
 
     def _get_refractive_index(self, pure_absorbance, wavenumbers):
         pad_size = 200
         # Extend absorbance spectrum
         wns_ext = self._extrapolate_wns(wavenumbers, pad_size)
-        pure_ext = np.pad(pure_absorbance, pad_size, mode='edge')
+        pure_ext = np.pad(pure_absorbance, pad_size, mode="edge")
 
         # Calculate refractive index
         nprs_ext = pure_ext / wns_ext
@@ -224,7 +285,7 @@ class MatlabMieCurvesGenerator:
         return nprs, nkks
 
     def _extrapolate_wns(self, wns, pad_size):
-        f = interp1d(np.arange(len(wns)), wns, fill_value='extrapolate')
+        f = interp1d(np.arange(len(wns)), wns, fill_value="extrapolate")
         idxs_ext = np.arange(-pad_size, len(wns) + pad_size)
         wns_ext = f(idxs_ext)
         return wns_ext
@@ -243,7 +304,7 @@ class MatlabMieCurvesDecomposer:
             self.n_components = self._estimate_n_components(qexts)
             self.svd.n_components = self.n_components
             # do not refit svd, since it was fitted during _estimation
-            return self.svd.components_[:self.n_components]
+            return self.svd.components_[: self.n_components]
 
         self.svd.fit(qexts)
         return self.svd.components_
